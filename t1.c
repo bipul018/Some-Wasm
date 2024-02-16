@@ -2,6 +2,8 @@ extern unsigned char __heap_base;
 
 typedef unsigned int uint;
 
+
+//External functions for allocator
 uint base_heap_pointer = (uint)&__heap_base;
 
 char* get_memory_base(){
@@ -19,6 +21,7 @@ uint get_max_possible_memory_size(){
 
 extern void grow_memory_by_page(int pages);
 
+//Also needed for allocator 
 void* memset(void* base, int value, uint num){
   char* ptr = base;
   for(uint i = 0; i < num; ++i)
@@ -26,48 +29,17 @@ void* memset(void* base, int value, uint num){
   return ptr;
 }
 
-
+//Allocator allocation functions
 extern void* alloc_mem(SIZE_TYPE mem);
 extern void free_mem(void* mem_ptr);
 
-
-
 #define nullptr ((void*)0)
 
-extern void logit();
+//External js logging function
+extern void lognum(int val);
+extern void log_c_str(const char* cstr);
 
-#define va_list __builtin_va_list
-#define va_arg(ap, type)  __builtin_va_arg(ap, type)
-#define va_start(ap, arg) __builtin_va_start(ap, arg)
-#define va_end(ap) __builtin_va_end(ap)
-
-
-int nothing(int n, ...){
-  va_list list;
-
-  va_start(list, n);
-  int v = va_arg(list, int);
-  va_end(list);
-  return n + v;  
-}
-
-int thing(int k, int l, int x){
-  if(k > 4){
-    return nothing(k,l,x);
-  }
-  return nothing(k,8,l,x);
-}
-
-int sum(int a[], int len) {
-  logit();
-  int sum = 0;
-  for(int i = 0; i < len; i++) {
-    sum += a[i];
-  }
-  return sum;
-}
-
-
+//Canvas interface codes
 typedef union Color Color;
 union Color {
   struct{
@@ -79,9 +51,6 @@ union Color {
 
 };
 
-int get_size(void){
-  return sizeof(Color);
-}
 
 #define _countof(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define min(a,b) (((a) < (b))?(a):(b))
@@ -97,7 +66,6 @@ const Color rotations[] = {
 };
 int offset = 0;
 int inx = 0;
-
 
 void update_canvas(int width, int height, Color image[]){
 #define img(i,j) (image[i*width + j])

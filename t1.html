@@ -9,38 +9,63 @@
     <script >
       //let instance= undefined;
       let g_instance;
+      let wins;
       let canv_mem_ptr;
       let canv_mem_size;
+      var allocated_c_strs =[];
+      function make_c_str(str){
+	  if (typeof str === 'string') {
+	      const cstr = wins.alloc_mem(str.length + 1);
+	      if(cstr == 0)
+		  return 0;
+	      const view = new Uint8Array(
+		  wins.memory.buffer,
+		  cstr,
+		  str.length + 1
+	      );
+	      for(var i = 0; i < str.length; i++){
+		  view[i] = str.charCodeAt(i);
+	      }
+	      view[str.length] = 0;
+	      allocated_c_strs.push(cstr);
+	      return cstr;
+	  }
+	  else{
+	      return 0;
+	  }
+      }
+      function free_all_c_str(){
+	  allocated_c_strs.forEach((item) =>
+	      wins.free_mem(item));
+	  allocated_c_strs = [];
+      }
+      function log_c_str(c_str){
+	  const view = new Uint8Array(
+	      g_instance.exports.memory.buffer,
+	      c_str);
+
+	  res_str = '';
+	  var inx = 0;
+	  while(view[inx] != 0){
+	      res_str += String.fromCharCode(view[inx]);
+	      inx++;
+	  }
+	  console.log(res_str);
+      }
       async function init() {
 
 	  const {instance } = await WebAssembly.instantiateStreaming(
 	      fetch("t1.wasm"),
 	      {
 		  "env": {
-		      logit: function() {console.log(' from logit');},
-		      grow_memory_by_page:  function(count){console.log(' Request to grow memory by ' + count + ' pages');instance.exports.memory.grow(count)}
+		      logint: function(intval) {console.log('intval');},
+		      grow_memory_by_page:  function(count){console.log(' Request to grow memory by ' + count + ' pages');instance.exports.memory.grow(count)},
+		      log_c_str: log_c_str
 		  }
 	      }
 	  );
 	  g_instance = instance;
-	  console.log('Memory buffer length : '+ g_instance.exports.memory.buffer.byteLength);
-	  const jsArray = [1, 2, 3, 4, 5];
-	  // Allocate memory for 5 32-bit integers
-	  // and return get starting address.
-	  const cArrayPointer = instance.exports.alloc_mem(jsArray.length * 4);
-	  // Turn that sequence of 32-bit integers
-	  // into a Uint32Array, starting at that address.
-	  const cArray = new Uint32Array(
-	      instance.exports.memory.buffer,
-	      cArrayPointer,
-	      jsArray.length
-	  );
-	  
-	  // Copy the values from JS to C.
-	  cArray.set(jsArray);
-	  // Run the function, passing the starting address and length.
-	  console.log(instance.exports.sum(cArrayPointer, cArray.length));
-	  console.log('Memory buffer length : '+ g_instance.exports.memory.buffer.byteLength);
+	  wins = g_instance.exports;
 	  const canvas = document.getElementById("canvas");
 	  const ctx = canvas.getContext("2d");
 
@@ -50,24 +75,6 @@
 	  canv_mem_size = ctx.width * ctx.height * 4;
 	  canv_mem_ptr = instance.exports.alloc_mem(canv_mem_size);
 	  console.log('Canvas memory size : ' + canv_mem_size);
-	  console.log('Memory buffer length : '+ g_instance.exports.memory.buffer.byteLength);
-	  console.log('Last inx : ' + (canv_mem_ptr + canv_mem_size -1 ));
-	  var ptr=g_instance.exports.alloc_mem(4 * 10);
-	  console.log('The index of another alloced resource ' + ptr);
-	  g_instance.exports.free_mem(ptr);
-	  const ptr2=g_instance.exports.alloc_mem(156);
-	  console.log('The index of another alloced resource ' + ptr2);
-	  ptr = ptr2;
-	  const args = new Uint32Array(
-	      g_instance.exports.memory.buffer,
-	      ptr,
-	      10);
-	  args[0] = 2;
-	  args[1] = 9;
-	  
-	  console.log('HAHAHA : ' + g_instance.exports.nothing(8, ptr));
-	  console.log('HEHE : ' + g_instance.exports.thing(8,1,2));
-
 	  
 	  
       }
