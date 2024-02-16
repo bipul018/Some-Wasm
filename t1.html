@@ -2,7 +2,24 @@
 <html>
   <head><title> Webasm test 1 </title> </head>
   <body>
-    <canvas id="canvas" width="1100" height="850">
+    <button onclick="inc_width()">
+      Increase width
+    </button>
+    
+    <button onclick="dec_width()">
+      Decrease width
+    </button>
+    <br/>
+    <br/>
+    <button onclick="inc_height()">
+      Increase Height 
+    </button>
+    
+    <button onclick="dec_height()">
+      Decrease Height
+    </button>
+    <br/>
+    <canvas id="canvas" width="400" height="400">
 
     </canvas>
     
@@ -52,6 +69,9 @@
 	  }
 	  console.log(res_str);
       }
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
       async function init() {
 
 	  const {instance } = await WebAssembly.instantiateStreaming(
@@ -66,8 +86,6 @@
 	  );
 	  g_instance = instance;
 	  wins = g_instance.exports;
-	  const canvas = document.getElementById("canvas");
-	  const ctx = canvas.getContext("2d");
 
 	  ctx.width = canvas.clientWidth;
 	  ctx.height = canvas.clientHeight;
@@ -81,10 +99,35 @@
       init().then(()=>{
 	  setInterval(update, 80);
       });
-      
+
+      function recreate_canvas(new_wid, new_hei){
+	  wins.free_mem(canv_mem_ptr);
+	  canvas.width = new_wid;
+	  canvas.height = new_hei;
+	  ctx.width = new_wid;
+	  ctx.height = new_hei;
+	  
+	  console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
+	  canv_mem_size = ctx.width * ctx.height * 4;
+	  canv_mem_ptr = wins.alloc_mem(canv_mem_size);
+      }
+      function inc_height(){
+	  if(ctx.height <  900)
+	      recreate_canvas(ctx.width, ctx.height + 10);
+      }
+      function dec_height(){
+	  if(ctx.height >  100)
+	      recreate_canvas(ctx.width, ctx.height - 10);
+      }
+      function inc_width(){
+	  if(ctx.width <  1000)
+	      recreate_canvas(ctx.width + 10, ctx.height);
+      }
+      function dec_width(){
+	  if(ctx.width >  100)
+	      recreate_canvas(ctx.width - 10, ctx.height);
+      }
       function update(){
-	  const canvas = document.getElementById("canvas");
-	  const ctx = canvas.getContext("2d");
 
 	  
 	  g_instance.exports.update_canvas(ctx.width, ctx.height, canv_mem_ptr);

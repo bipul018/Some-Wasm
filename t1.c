@@ -83,5 +83,5 @@ void update_canvas(int width, int height, Color image[]){
   offset+=1;
   if((offset + min(width,height)/3) > (min(width,height)))
     offset = 0;
-  
+#undef img  
 }
