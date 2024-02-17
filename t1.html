@@ -78,7 +78,7 @@
 	      fetch("t1.wasm"),
 	      {
 		  "env": {
-		      logint: function(intval) {console.log('intval');},
+		      logint: function(intval) {console.log(intval);},
 		      grow_memory_by_page:  function(count){console.log(' Request to grow memory by ' + count + ' pages');instance.exports.memory.grow(count)},
 		      log_c_str: log_c_str
 		  }
@@ -101,15 +101,24 @@
       });
 
       function recreate_canvas(new_wid, new_hei){
-	  wins.free_mem(canv_mem_ptr);
-	  canvas.width = new_wid;
-	  canvas.height = new_hei;
-	  ctx.width = new_wid;
-	  ctx.height = new_hei;
-	  
+	  //console.log('Old memory pointer inx ' + canv_mem_ptr);
+	  console.log('\n');
+	  const new_canv_mem_size = new_wid * new_hei * 4;
+	  const new_mem = wins.realloc_mem(canv_mem_ptr, new_canv_mem_size);
+	  //console.log('New memory pointer inx ' + new_mem);
+	  //wins.free_mem(canv_mem_ptr);
+	  //new_mem = wins.alloc_mem(canv_mem_size);
+	  //canv_mem_ptr = wins.alloc_mem(canv_mem_size);
+
+	  if(new_mem != 0){
+	      canvas.width = new_wid;
+	      canvas.height = new_hei;
+	      ctx.width = new_wid;
+	      ctx.height = new_hei;
+	      canv_mem_ptr = new_mem;
+	      canv_mem_size = new_canv_mem_size;
+	  }
 	  console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
-	  canv_mem_size = ctx.width * ctx.height * 4;
-	  canv_mem_ptr = wins.alloc_mem(canv_mem_size);
       }
       function inc_height(){
 	  if(ctx.height <  900)

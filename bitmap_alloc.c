@@ -1,6 +1,6 @@
 
 #ifndef SIZE_TYPE
-#define SIZE_TYPE unsigned long long
+//#define SIZE_TYPE unsigned long long
 #endif
 
 #define nullptr ((void*)0)
@@ -23,6 +23,19 @@ extern char* get_memory_base();
 extern SIZE_TYPE get_page_size();
 extern SIZE_TYPE get_max_possible_memory_size();
 extern void grow_memory_by_page(int pages);
+extern void* memcpy(void* restrict dest, const void* restrict src, SIZE_TYPE count);
+
+#ifdef DEBUG
+extern void log_c_str(const char* cstr);
+extern void logint(int val);
+#else
+static void log_c_str(const char* cstr){
+  (void)cstr;
+}
+static void logint(int val){
+  (void)val;
+}
+#endif
 
 static SIZE_TYPE used_mem = 0;
 
@@ -56,7 +69,7 @@ static LargeMem* large_first_allocd = nullptr;
 static LargeMem* insert_large_mem_by_size(LargeMem* head, LargeMem* new_one){
 
   LargeMem** phead = &head;
-  for(;(*phead) != nullptr; (*phead) = (*phead)->next){
+  for(;(*phead) != nullptr; phead = &(*phead)->next){
     if((*phead)->size > new_one->size)
       break;
   }
@@ -68,6 +81,91 @@ static LargeMem* insert_large_mem_by_size(LargeMem* head, LargeMem* new_one){
 
 void* alloc_mem(SIZE_TYPE mem);
 void free_mem(void* mem_ptr);
+
+static LargeMem** find_intersecting(LargeMem* mem1, LargeMem** pstart){
+  for(LargeMem** pmem2 = pstart;
+      (*pmem2) != nullptr;){
+
+    if(mem1->ptr > (*pmem2)->ptr){
+      if((mem1->ptr - (*pmem2)->ptr) <= mem1->size){
+	return pmem2;
+      }
+    }
+    else{
+      if(((*pmem2)->ptr - mem1->ptr) <= (*pmem2)->size){
+	return pmem2;
+      }
+    }
+    pmem2 = &((*pmem2)->next);
+  }
+  return nullptr;
+}
+
+static void try_merging_large_mems(void){
+
+  //It will merge, but unfortunately, make the
+  //linked list not in sized order
+  //Need to sort the linked list if merged
+  
+  for(LargeMem* mem1 = large_first_free;
+      (mem1 != nullptr) && (mem1->next != nullptr);
+      mem1 = mem1->next){
+    SIZE_TYPE prev_size = mem1->size;
+    LargeMem** pmem2 = &mem1->next;
+    while((pmem2 = find_intersecting(mem1, pmem2)) != nullptr){
+      char* new_mem = nullptr;
+      SIZE_TYPE new_size = 0;
+      //We always remove *pmem2      
+      //See if mem1 and *pmem2 are consecutive
+      if(mem1->ptr > (*pmem2)->ptr){
+	if((mem1->ptr - (*pmem2)->ptr) <= mem1->size){
+	  new_mem = (*pmem2)->ptr;
+	  new_size = (mem1->ptr - (*pmem2)->ptr) + mem1->size;
+	}
+      }
+      else{
+	if(((*pmem2)->ptr - mem1->ptr) <= (*pmem2)->size){
+	  new_mem = mem1->ptr;
+	  new_size = ((*pmem2)->ptr - mem1->ptr) + (*pmem2)->size;
+	}
+      }
+      
+      if(new_mem != nullptr){
+	LargeMem* to_free = *pmem2;
+	(*pmem2)->next = to_free->next;
+	mem1->ptr = new_mem;
+	mem1->size = new_size;
+	free_mem(to_free);
+      }
+      else{
+	pmem2 = &((*pmem2)->next);
+      }
+    }
+
+    if(prev_size != mem1->size){
+      //Merging happened, so need to resort, kind of memove 
+
+      LargeMem* ptr = mem1;
+      for(; (ptr->next != nullptr) &&
+	    (ptr->next->size < ptr->size);
+	  ptr = ptr->next){
+	//Swap values of ptr and ptr->next except for pointer values
+	LargeMem* next = ptr->next;
+	LargeMem tmp = *ptr;
+
+	*ptr = *next;
+	*next = tmp;
+
+	next->next = ptr->next;
+	ptr->next = next;
+      }
+    }
+  }
+
+
+  
+}
+
 static void* alloc_large_mem(SIZE_TYPE size){
   size = ((size + sizeof(BitMap) + MAX_ALLOC_SIZE - 1) / (sizeof(BitMap) + MAX_ALLOC_SIZE)) *
     (sizeof(BitMap) + MAX_ALLOC_SIZE);
@@ -137,10 +235,7 @@ static _Bool free_large_mem(void* ptr){
   (*phead) = mem_node->next;
 
   large_first_free = insert_large_mem_by_size(large_first_free, mem_node);
-
-  
-  
-  //Merging feature needed
+  //Maybe make a realloc feature
   
   return true;
 }
@@ -255,12 +350,9 @@ void* alloc_mem(SIZE_TYPE mem){
   return ptr;
 }
 
-void free_mem(void* mem_ptr){
+//Returns if it is a map allocated block
 
-  if(free_large_mem(mem_ptr)){
-    return;
-  }
-  
+static BitMap* find_if_map_allocd(void* mem_ptr, SIZE_TYPE* out_inx){
   char* to_free = mem_ptr;
   //Find mem_ptr in one of linked list
   BitMap* map = first_map;
@@ -270,22 +362,34 @@ void free_mem(void* mem_ptr){
       break;
     }
   }
-
   //Invalid memory
   if(map == nullptr){
-    return;
+    return nullptr;
   }
-
   //Now test if it is a valid memory head
   SIZE_TYPE inx = to_free - ((char*)map + sizeof(*map));
   inx = inx / BLOCK_SIZE;
   if(get_nth(map->bitmap, inx) != BLK_USED)
-    return;
-
+    return nullptr;
   //Also test if this memory is absolute start of the block
   if(to_free != ((char*)(map + 1) + inx * BLOCK_SIZE))
-    return;
+    return nullptr;
+  *out_inx = inx;
+  return map;
+}
 
+void free_mem(void* mem_ptr){
+
+  if(free_large_mem(mem_ptr)){
+    return;
+  }
+
+
+  SIZE_TYPE inx = 0;
+  BitMap* map = find_if_map_allocd(mem_ptr, &inx);
+  if(map == nullptr)
+    return;
+  
   set_nth(map->bitmap, inx, BLK_FREE);
   inx++;
   for(; inx < DATA_PER_MAP; ++inx){
@@ -294,4 +398,210 @@ void free_mem(void* mem_ptr){
     set_nth(map->bitmap, inx, BLK_FREE);
   }
   
+}
+
+static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
+  
+  LargeMem** pmem2 = &large_first_free;
+  while((pmem2 = find_intersecting(memptr, pmem2)) != nullptr){
+    log_c_str("Going to do some realloc merging");
+    char* new_mem = nullptr;
+    SIZE_TYPE new_size = 0;
+    //We always remove *pmem2      
+    //See if memptr and *pmem2 are consecutive
+    if(memptr->ptr > (*pmem2)->ptr){
+      if((memptr->ptr - (*pmem2)->ptr) <= memptr->size){
+	//Need to do some memmoving
+	char* ptr1 = (*pmem2)->ptr;
+	char* ptr2 = memptr->ptr;
+	char* ptrn = memptr->ptr + memptr->size;
+
+	while(ptr2 < ptrn){
+	  if((ptrn - ptr2) > (ptr2 - ptr1)){
+	    memcpy(ptr1, ptr2, ptr2-ptr1);
+	  }
+	  else{
+	    memcpy(ptr1, ptr2, ptrn-ptr2);
+	  }
+	  SIZE_TYPE ptrdiff = ptr2 - ptr1;
+	  ptr1 = ptr2;
+	  ptr2 += ptrdiff;
+	}
+	new_mem = (*pmem2)->ptr;
+	new_size = (memptr->ptr - (*pmem2)->ptr) + memptr->size;
+      }
+    }
+    else{
+      if(((*pmem2)->ptr - memptr->ptr) <= (*pmem2)->size){
+	//no need for memmoving
+	new_mem = memptr->ptr;
+	new_size = ((*pmem2)->ptr - memptr->ptr) + (*pmem2)->size;
+      }
+    }
+    LargeMem* to_free = *pmem2;
+    (*pmem2) = to_free->next;
+    memptr->ptr = new_mem;
+    memptr->size = new_size;
+    free_mem(to_free);
+  }
+  
+  new_size = ((new_size + sizeof(BitMap) + MAX_ALLOC_SIZE - 1) /
+	      (sizeof(BitMap) + MAX_ALLOC_SIZE)) *
+    (sizeof(BitMap) + MAX_ALLOC_SIZE);
+
+  //Find if aligned new size is same as old aligned size
+  //for now also if lesser 
+  if(new_size <= memptr->size){
+    log_c_str("Large page realloc, same or less size");
+    return memptr->ptr;
+  }
+
+  //Find if this is the recently allcocated and the last portion in memory, if
+  //so, we may be able to just request more pages 
+
+  //Hyaa, just check the sizes of all the memory things except this one
+  //TODO :: Implement this , and also maybe merging and splitting large requests
+  // at the same time later
+
+  //For now if more requested, just allocate it
+  log_c_str("Before attempting large reallocation " );
+
+  log_c_str("The allocated large pages " );
+  for(LargeMem* ptr = large_first_allocd; ptr != nullptr; ptr = ptr->next){
+    logint((int)(ptr->ptr));
+  }
+  log_c_str("The free large pages ");
+  for(LargeMem* ptr = large_first_free; ptr != nullptr; ptr = ptr->next){
+    logint((int)(ptr->ptr));
+  }
+  LargeMem* old_mem = memptr;
+  void* new_mem = alloc_mem(new_size);
+  if(new_mem == nullptr){
+    log_c_str("Large page realloc, alloc larger page failed");
+    return nullptr;
+  }
+  log_c_str("Larger page realloc successful as ");
+  logint((int)new_mem);
+  
+  memcpy(new_mem, old_mem->ptr, old_mem->size);
+
+  free_mem(old_mem->ptr);
+  /* log_c_str("The allocated large pages " ); */
+  /* for(LargeMem* ptr = large_first_allocd; ptr != nullptr; ptr = ptr->next){ */
+  /*   logint((int)(ptr->ptr)); */
+  /* } */
+  /* log_c_str("The free large pages "); */
+  /* for(LargeMem* ptr = large_first_free; ptr != nullptr; ptr = ptr->next){ */
+  /*   logint((int)(ptr->ptr)); */
+  /*   log_c_str(" having next "); */
+  /*   logint((int)(ptr->next)); */
+  /* } */
+
+  return new_mem;
+}
+
+
+
+void* realloc_mem(void* memptr, SIZE_TYPE new_size){
+  log_c_str("The request for reallocation of :");
+  logint((int)memptr);
+  if(memptr == nullptr){
+    log_c_str("Allocating during realloc");
+    return alloc_mem(new_size);
+  }
+
+  if(new_size == 0){
+    log_c_str("Freeing during realloc");
+    free_mem(memptr);
+    return nullptr;
+  }
+  log_c_str("Trying realloc , searching if large memory pages");
+  
+  //Find if it is a large memory
+
+  
+  LargeMem* head = large_first_allocd;
+  for(; (head) != nullptr; head = ((head)->next)){
+    logint((int)((head)->ptr));
+    if((head)->ptr == (char*)memptr){
+      break;
+    }
+  }
+
+  
+  
+  
+  
+  if((head) != nullptr)
+    return realloc_large_mem(head, new_size);
+  log_c_str("Not a large alloc, realloc on bitmap");
+
+  //Find if this is a bitmap allocated
+  SIZE_TYPE inx;
+  BitMap* map = find_if_map_allocd(memptr, &inx);
+
+  if(map == nullptr)
+    return nullptr;
+
+  
+  //Find it's size
+  SIZE_TYPE size = 0;
+  size++;
+  for(SIZE_TYPE i = inx+1; i < DATA_PER_MAP; ++i){
+    if(get_nth(map->bitmap, i) != BLK_EXTEND)
+      break;
+    size++;
+  }
+
+  size *= BLOCK_SIZE;
+
+
+  new_size = (new_size + BLOCK_SIZE - 1) & ~(BLOCK_SIZE -1);
+  //Memory increased beyond max_alloc_size
+  if(new_size > MAX_ALLOC_SIZE){
+
+    void* new_alloc = alloc_mem(new_size);
+    if(new_alloc == nullptr)
+      return nullptr;
+
+    memcpy(new_alloc, memptr, size);
+    free_mem(memptr);
+    return new_alloc;
+  }
+
+  //Memory same
+  if(new_size == size)
+    return memptr;
+
+  //Memory increased
+  if(new_size > size){
+    SIZE_TYPE diff = new_size - size;
+    diff /= BLOCK_SIZE;
+    for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < new_size / BLOCK_SIZE; ++i){
+      if(get_nth(map->bitmap, i) != BLK_FREE){
+	//Need to allocate more memory
+	void* new_mem = alloc_mem(new_size);
+	if(new_mem == nullptr)
+	  return nullptr;
+
+	memcpy(new_mem, memptr, size);
+	free_mem(memptr);
+	return new_mem;
+      }
+    }
+    for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < new_size / BLOCK_SIZE; ++i){
+      set_nth(map->bitmap, i,  BLK_EXTEND);
+    }
+    return memptr;
+
+  }
+
+  //Memory decreased
+  SIZE_TYPE diff = size - new_size;
+  diff = diff / BLOCK_SIZE;
+
+  for(SIZE_TYPE i = inx + (size/BLOCK_SIZE - diff); i < size/BLOCK_SIZE; ++i){
+    set_nth(map->bitmap, i, BLK_FREE);
+  }
+  return memptr;
 }

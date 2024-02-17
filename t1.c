@@ -28,6 +28,14 @@ void* memset(void* base, int value, uint num){
     ptr[i] = value;
   return ptr;
 }
+void* memcpy(void* restrict dest, const void* restrict src, uint count){
+  char* cdest = dest;
+  const char* csrc = src;
+  for(uint i = 0; i < count; ++i)
+    cdest[i] = csrc[i];
+  
+  return dest;
+}
 
 //Allocator allocation functions
 extern void* alloc_mem(SIZE_TYPE mem);
