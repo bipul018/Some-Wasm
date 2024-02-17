@@ -25,9 +25,48 @@ extern SIZE_TYPE get_max_possible_memory_size();
 extern void grow_memory_by_page(int pages);
 extern void* memcpy(void* restrict dest, const void* restrict src, SIZE_TYPE count);
 
+//This is the amount of memory taken already, is strictly <=
+//_reserved_mem and is aligned to a map struct size + max map refrenceably memory size
+//static SIZE_TYPE _used_mem = 0;
+static SIZE_TYPE used_mem = 0;
+//This is the amount of memory taken already and that is
+//aligned to page boundary
+//static SIZE_TYPE _reserved_mem = 0;
+
+//TODO:: Implement that _reserved_mem and _used_mem 
+
+
+//Allocate some pages, in that allocate some regions for bitmap and next pointer of bitmap
+enum{
+  BLOCK_SIZE = 16,
+  MAP_BLKS = 64,
+  BITS_ARR_LEN=((MAP_BLKS * BLOCK_SIZE - sizeof(char*)) / sizeof(SIZE_TYPE)),
+  DATA_PER_MAP = ((BITS_ARR_LEN * sizeof(SIZE_TYPE) * 4)),
+  MAX_ALLOC_SIZE = BLOCK_SIZE * DATA_PER_MAP,
+};
+
+
+typedef struct BitMap BitMap;
+struct BitMap {
+  SIZE_TYPE bitmap[BITS_ARR_LEN];
+  BitMap* next_map;
+};
+
+
 #ifdef DEBUG
 extern void log_c_str(const char* cstr);
 extern void logint(int val);
+SIZE_TYPE mem_allocr_query_struct_size(){
+  return sizeof(BitMap);
+}
+SIZE_TYPE mem_allocr_query_max_alloc(){
+  return MAX_ALLOC_SIZE;
+}
+SIZE_TYPE mem_allocr_query_mapping_size(){
+  return BLOCK_SIZE * MAP_BLKS;
+}
+//Define exportable functions for debugging
+
 #else
 static void log_c_str(const char* cstr){
   (void)cstr;
@@ -37,23 +76,6 @@ static void logint(int val){
 }
 #endif
 
-static SIZE_TYPE used_mem = 0;
-
-
-//Allocate some pages, in that allocate some regions for bitmap and next pointer of bitmap
-enum{
-  BLOCK_SIZE = 16,
-  MAP_BLKS = 256,
-  BITS_ARR_LEN=((MAP_BLKS * BLOCK_SIZE - sizeof(char*) + sizeof(SIZE_TYPE) - 1) / sizeof(SIZE_TYPE)),
-  DATA_PER_MAP = ((BITS_ARR_LEN * sizeof(SIZE_TYPE)) / 2),
-  MAX_ALLOC_SIZE = BLOCK_SIZE * DATA_PER_MAP,
-};
-
-typedef struct BitMap BitMap;
-struct BitMap {
-  SIZE_TYPE bitmap[BITS_ARR_LEN];
-  BitMap* next_map;
-};
 
 static BitMap* first_map = nullptr;
 
@@ -400,6 +422,8 @@ void free_mem(void* mem_ptr){
   
 }
 
+//TODO:: make it also merge with 'upcoming' pages, if at last
+//For this the _reserved_mem and _used_mem might be necessary
 static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   
   LargeMem** pmem2 = &large_first_free;
