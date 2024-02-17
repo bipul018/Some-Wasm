@@ -27,6 +27,9 @@ t1.c :
 t1.html :
     This is the host html file for wasm.
 
+t1.js :
+    This is the js driver code for wasm.
+
 compile.bat :
     This batch file compiles the simple_serv.c, as normal C executable (simple_serv.exe) and t1.c as a wasm file (t1.wasm) later loaded by t1.html.
     If in windows and clang is in path, and hoping that clang comes with wasm32, {which is defualt I think} , just run this batch file to compile both
