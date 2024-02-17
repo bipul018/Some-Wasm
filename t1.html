@@ -74,82 +74,81 @@
 
       async function init() {
 
-	  const {instance } = await WebAssembly.instantiateStreaming(
-	      fetch("t1.wasm"),
-	      {
-		  "env": {
-		      logint: function(intval) {console.log(intval);},
-		      grow_memory_by_page:  function(count){console.log(' Request to grow memory by ' + count + ' pages');instance.exports.memory.grow(count)},
-		      log_c_str: log_c_str
-		  }
-	      }
-	  );
-	  g_instance = instance;
-	  wins = g_instance.exports;
-
-	  ctx.width = canvas.clientWidth;
-	  ctx.height = canvas.clientHeight;
-	  console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
-	  canv_mem_size = ctx.width * ctx.height * 4;
-	  canv_mem_ptr = instance.exports.alloc_mem(canv_mem_size);
-	  console.log('Canvas memory size : ' + canv_mem_size);
-	  
-	  
+      const {instance } = await WebAssembly.instantiateStreaming(
+      fetch("t1.wasm"),
+      {
+      "env": {
+      logint: function(intval) {console.log(intval);},
+      grow_memory_by_page:  function(count){console.log(' Request to grow memory by ' + count + ' pages');instance.exports.memory.grow(count)},
+      log_c_str: log_c_str
+      }
+      }
+      );
+      g_instance = instance;
+      wins = g_instance.exports;
+      ctx.width = canvas.clientWidth;
+      ctx.height = canvas.clientHeight;
+      console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
+      canv_mem_size = ctx.width * ctx.height * 4;
+      canv_mem_ptr = instance.exports.alloc_mem(canv_mem_size);
+      console.log('Canvas memory size : ' + canv_mem_size);
+      
+      
       }
       init().then(()=>{
-	  setInterval(update, 80);
-      });
+	setInterval(update, 80);
+	});
 
-      function recreate_canvas(new_wid, new_hei){
-	  //console.log('Old memory pointer inx ' + canv_mem_ptr);
-	  console.log('\n');
-	  const new_canv_mem_size = new_wid * new_hei * 4;
-	  const new_mem = wins.realloc_mem(canv_mem_ptr, new_canv_mem_size);
-	  //console.log('New memory pointer inx ' + new_mem);
-	  //wins.free_mem(canv_mem_ptr);
-	  //new_mem = wins.alloc_mem(canv_mem_size);
-	  //canv_mem_ptr = wins.alloc_mem(canv_mem_size);
+	function recreate_canvas(new_wid, new_hei){
+	//console.log('Old memory pointer inx ' + canv_mem_ptr);
+	console.log('\n');
+	const new_canv_mem_size = new_wid * new_hei * 4;
+	const new_mem = wins.realloc_mem(canv_mem_ptr, new_canv_mem_size);
+	//console.log('New memory pointer inx ' + new_mem);
+	//wins.free_mem(canv_mem_ptr);
+	//new_mem = wins.alloc_mem(canv_mem_size);
+	//canv_mem_ptr = wins.alloc_mem(canv_mem_size);
 
-	  if(new_mem != 0){
-	      canvas.width = new_wid;
-	      canvas.height = new_hei;
-	      ctx.width = new_wid;
-	      ctx.height = new_hei;
-	      canv_mem_ptr = new_mem;
-	      canv_mem_size = new_canv_mem_size;
+	if(new_mem != 0){
+	canvas.width = new_wid;
+	canvas.height = new_hei;
+	ctx.width = new_wid;
+	ctx.height = new_hei;
+	canv_mem_ptr = new_mem;
+	canv_mem_size = new_canv_mem_size;
+	}
+	console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
+	}
+	function inc_height(){
+	if(ctx.height <  900)
+			 recreate_canvas(ctx.width, ctx.height + 10);
+			 }
+			 function dec_height(){
+			 if(ctx.height >  100)
+	  recreate_canvas(ctx.width, ctx.height - 10);
 	  }
-	  console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);
-      }
-      function inc_height(){
-	  if(ctx.height <  900)
-	      recreate_canvas(ctx.width, ctx.height + 10);
-      }
-      function dec_height(){
-	  if(ctx.height >  100)
-	      recreate_canvas(ctx.width, ctx.height - 10);
-      }
-      function inc_width(){
+	  function inc_width(){
 	  if(ctx.width <  1000)
-	      recreate_canvas(ctx.width + 10, ctx.height);
-      }
-      function dec_width(){
-	  if(ctx.width >  100)
-	      recreate_canvas(ctx.width - 10, ctx.height);
-      }
-      function update(){
+			  recreate_canvas(ctx.width + 10, ctx.height);
+			  }
+			  function dec_width(){
+			  if(ctx.width >  100)
+	    recreate_canvas(ctx.width - 10, ctx.height);
+	    }
+	    function update(){
 
-	  
-	  g_instance.exports.update_canvas(ctx.width, ctx.height, canv_mem_ptr);
-	  //g_instance.exports.update_canvas(ctx.width, ctx.height);
-	  const view = new Uint8ClampedArray(
-	      g_instance.exports.memory.buffer,
-	      canv_mem_ptr,
-	      canv_mem_size);
-	  
-	  img = new ImageData(view,ctx.width, ctx.height);
-	  ctx.putImageData(img, 0, 0);
-	  
-      }
+	    
+	    g_instance.exports.update_canvas(ctx.width, ctx.height, canv_mem_ptr);
+	    //g_instance.exports.update_canvas(ctx.width, ctx.height);
+	    const view = new Uint8ClampedArray(
+	    g_instance.exports.memory.buffer,
+	    canv_mem_ptr,
+	    canv_mem_size);
+	    
+	    img = new ImageData(view,ctx.width, ctx.height);
+	    ctx.putImageData(img, 0, 0);
+	    
+	    }
 
 
     </script>

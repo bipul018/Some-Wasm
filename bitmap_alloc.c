@@ -6,6 +6,9 @@
 #define nullptr ((void*)0)
 #define array_len(arr) (sizeof(arr)/ sizeof((arr)[0]))
 
+#define false 0
+#define true 1
+typedef _Bool bool;
 //Make a bit map allocator , each block with 2 bits information
 //Block size is fixed, and always rounded up, may cause loss of memory, but is easier to maintain
 
@@ -19,21 +22,42 @@ enum  BlockState{
 /* const SIZE_TYPE page_size = 128; */
 
 
+//TODO:: Later these two cannot be a function, it should be a const variable or something
+//Which is once initialized only
 extern char* get_memory_base();
 extern SIZE_TYPE get_page_size();
+
 extern SIZE_TYPE get_max_possible_memory_size();
 extern void grow_memory_by_page(int pages);
 extern void* memcpy(void* restrict dest, const void* restrict src, SIZE_TYPE count);
 
 //This is the amount of memory taken already, is strictly <=
 //_reserved_mem and is aligned to a map struct size + max map refrenceably memory size
-//static SIZE_TYPE _used_mem = 0;
-static SIZE_TYPE used_mem = 0;
+static SIZE_TYPE _used_mem = 0;
+//static SIZE_TYPE used_mem = 0;
 //This is the amount of memory taken already and that is
 //aligned to page boundary
-//static SIZE_TYPE _reserved_mem = 0;
+static SIZE_TYPE _reserved_mem = 0;
 
-//TODO:: Implement that _reserved_mem and _used_mem 
+//Grows the memory , makes sure that reserved is >= used
+static bool ensure_reserved(void){
+
+  SIZE_TYPE new_res = (_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
+
+  if(new_res > _reserved_mem){
+    if(new_res > get_max_possible_memory_size()){
+      return false;
+    }
+    
+    SIZE_TYPE more_pages = (new_res - _reserved_mem) /get_page_size();
+    grow_memory_by_page(more_pages);
+    _reserved_mem = new_res;
+  }
+  return true;
+}
+
+
+
 
 
 //Allocate some pages, in that allocate some regions for bitmap and next pointer of bitmap
@@ -64,6 +88,12 @@ SIZE_TYPE mem_allocr_query_max_alloc(){
 }
 SIZE_TYPE mem_allocr_query_mapping_size(){
   return BLOCK_SIZE * MAP_BLKS;
+}
+SIZE_TYPE mem_allocr_query_used_up(){
+  return _used_mem;
+}
+SIZE_TYPE mem_allocr_query_reseved(){
+  return _reserved_mem;
 }
 //Define exportable functions for debugging
 
@@ -189,6 +219,7 @@ static void try_merging_large_mems(void){
 }
 
 static void* alloc_large_mem(SIZE_TYPE size){
+  log_c_str("Allocate large mem entered");
   size = ((size + sizeof(BitMap) + MAX_ALLOC_SIZE - 1) / (sizeof(BitMap) + MAX_ALLOC_SIZE)) *
     (sizeof(BitMap) + MAX_ALLOC_SIZE);
 
@@ -199,29 +230,35 @@ static void* alloc_large_mem(SIZE_TYPE size){
       break;
     }
   }
-
+  log_c_str("Now finished looking for existing");
   if((*phead) == nullptr){
     
     LargeMem* new_large = alloc_mem(sizeof*new_large);
+    log_c_str("Allocd ptr for large mem");
     if(new_large == nullptr){
       return nullptr;
     }
+    
     //First also align up used_size to max alloc size and bitmap size
     SIZE_TYPE total_mem_per_map = sizeof(BitMap) + MAX_ALLOC_SIZE;
-    SIZE_TYPE aligned_used_mem = ((used_mem + total_mem_per_map - 1)/total_mem_per_map) *
+    SIZE_TYPE aligned_used_mem = ((_used_mem + total_mem_per_map - 1)/total_mem_per_map) *
       total_mem_per_map;
-
+    
     SIZE_TYPE new_used_mem = aligned_used_mem + size;
-    new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
+    log_c_str("New used mem is of value : ");
+    logint((int)new_used_mem);
+    //new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
     if(new_used_mem > get_max_possible_memory_size()){
       free_mem(new_large);
       return nullptr;
     }
 
     //Bump memory
-    grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
-    used_mem = new_used_mem;
-
+    //grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
+    _used_mem = new_used_mem;
+    //Okay to not check ensure i guess
+    ensure_reserved();
+    log_c_str("Ensure add reserved");
     
     new_large->next = nullptr;
     new_large->size = size;
@@ -239,8 +276,6 @@ static void* alloc_large_mem(SIZE_TYPE size){
   
   return mem->ptr;
 }
-#define false 0
-#define true 1
 static _Bool free_large_mem(void* ptr){
   //Find one in the free list if there
   LargeMem** phead = &large_first_allocd;
@@ -268,18 +303,19 @@ static BitMap* one_more_map(){
   
   //First also align up used_size to max alloc size and bitmap size
   SIZE_TYPE total_mem_per_map = sizeof(BitMap) + MAX_ALLOC_SIZE;
-  SIZE_TYPE aligned_used_mem = ((used_mem + total_mem_per_map - 1)/total_mem_per_map) *
+  SIZE_TYPE aligned_used_mem = ((_used_mem + total_mem_per_map - 1)/total_mem_per_map) *
     total_mem_per_map;
 
   SIZE_TYPE new_used_mem = aligned_used_mem + sizeof(BitMap);
-  new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
+  //new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
   
   if(new_used_mem > get_max_possible_memory_size())
     return nullptr;
 
   //Bump memory
-  grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
-  used_mem = new_used_mem;
+  //grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
+  _used_mem = new_used_mem;
+  ensure_reserved();
 
     
   BitMap* next_thing =(BitMap*)(get_memory_base() + aligned_used_mem);
@@ -320,7 +356,7 @@ void* alloc_mem(SIZE_TYPE mem){
     return alloc_large_mem(mem);
   }
   
-  SIZE_TYPE blk_count = mem / BLOCK_SIZE;
+  //SIZE_TYPE blk_count = mem / BLOCK_SIZE;
   
   BitMap* map = first_map;
   SIZE_TYPE inx = 0;
@@ -346,6 +382,9 @@ void* alloc_mem(SIZE_TYPE mem){
  exit_loop:
   if(map == nullptr){
     map = one_more_map();
+    log_c_str("One more map passed as");
+    logint((int)map);
+     
     inx = 0;
     if(map == nullptr)
       return nullptr;
@@ -354,14 +393,18 @@ void* alloc_mem(SIZE_TYPE mem){
   //Find if enough pages is already requested
   //Convert inx + map to pointer
   char* ptr = (char*)map + sizeof(*map) + inx * BLOCK_SIZE;
-  if(((mem + ptr) > (get_memory_base() + used_mem))){
+  if(((mem + ptr) > (get_memory_base() + _used_mem))){
     //Request enough mem pages
-    SIZE_TYPE new_mem = ((mem + ptr) - (get_memory_base() + used_mem));
-    new_mem = (new_mem + get_page_size() - 1) & ~(get_page_size() - 1);
-    SIZE_TYPE new_pages = new_mem / get_page_size();
-    grow_memory_by_page(new_pages);
-    used_mem += new_pages * get_page_size();
-
+    SIZE_TYPE new_mem = ((mem + ptr) - (get_memory_base() + _used_mem));
+    //new_mem = (new_mem + get_page_size() - 1) & ~(get_page_size() - 1);
+    //SIZE_TYPE new_pages = new_mem / get_page_size();
+    //grow_memory_by_page(new_pages);
+    //used_mem += new_pages * get_page_size();
+    _used_mem += new_mem;
+    if(!ensure_reserved()){
+      _used_mem -= new_mem;
+      return nullptr;
+    }
   }
 
   //Set bits in corresponding
@@ -422,10 +465,14 @@ void free_mem(void* mem_ptr){
   
 }
 
-//TODO:: make it also merge with 'upcoming' pages, if at last
+
 //For this the _reserved_mem and _used_mem might be necessary
 static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
-  
+
+  //TODO:: A bug is here, that is non conformant behaviour of realloc
+  //Even after all this merging, if size isn't enough and need to increase ,
+  //which fails, there should be no changes in the original format, which has happened
+  //here 
   LargeMem** pmem2 = &large_first_free;
   while((pmem2 = find_intersecting(memptr, pmem2)) != nullptr){
     log_c_str("Going to do some realloc merging");
@@ -479,14 +526,27 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
     log_c_str("Large page realloc, same or less size");
     return memptr->ptr;
   }
-
+  
   //Find if this is the recently allcocated and the last portion in memory, if
   //so, we may be able to just request more pages 
+  //Find end of current page
+  char* end_point = memptr->ptr + memptr->size;
+  //When at end, end_point == mem_base + _used_up
+  if(end_point == (get_memory_base() + _used_mem)){
 
-  //Hyaa, just check the sizes of all the memory things except this one
-  //TODO :: Implement this , and also maybe merging and splitting large requests
-  // at the same time later
-
+    SIZE_TYPE tmp_used = _used_mem;
+    _used_mem += new_size - memptr->size;
+    if(ensure_reserved()){
+      memptr->size = new_size;
+      return memptr->ptr;
+    }
+    else{
+      _used_mem = tmp_used;
+      return nullptr;
+    }
+  }
+  
+  
   //For now if more requested, just allocate it
   log_c_str("Before attempting large reallocation " );
 
@@ -498,6 +558,8 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   for(LargeMem* ptr = large_first_free; ptr != nullptr; ptr = ptr->next){
     logint((int)(ptr->ptr));
   }
+
+  
   LargeMem* old_mem = memptr;
   void* new_mem = alloc_mem(new_size);
   if(new_mem == nullptr){
@@ -510,16 +572,6 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   memcpy(new_mem, old_mem->ptr, old_mem->size);
 
   free_mem(old_mem->ptr);
-  /* log_c_str("The allocated large pages " ); */
-  /* for(LargeMem* ptr = large_first_allocd; ptr != nullptr; ptr = ptr->next){ */
-  /*   logint((int)(ptr->ptr)); */
-  /* } */
-  /* log_c_str("The free large pages "); */
-  /* for(LargeMem* ptr = large_first_free; ptr != nullptr; ptr = ptr->next){ */
-  /*   logint((int)(ptr->ptr)); */
-  /*   log_c_str(" having next "); */
-  /*   logint((int)(ptr->next)); */
-  /* } */
 
   return new_mem;
 }
@@ -599,8 +651,8 @@ void* realloc_mem(void* memptr, SIZE_TYPE new_size){
 
   //Memory increased
   if(new_size > size){
-    SIZE_TYPE diff = new_size - size;
-    diff /= BLOCK_SIZE;
+    //SIZE_TYPE diff = new_size - size;
+    //diff /= BLOCK_SIZE;
     for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < new_size / BLOCK_SIZE; ++i){
       if(get_nth(map->bitmap, i) != BLK_FREE){
 	//Need to allocate more memory
