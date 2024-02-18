@@ -1,7 +1,6 @@
-
-#ifndef SIZE_TYPE
+//#ifndef SIZE_TYPE
 //#define SIZE_TYPE unsigned long long
-#endif
+//#endif
 
 #define nullptr ((void*)0)
 #define array_len(arr) (sizeof(arr)/ sizeof((arr)[0]))
@@ -11,8 +10,6 @@
 typedef _Bool bool;
 //Make a bit map allocator , each block with 2 bits information
 //Block size is fixed, and always rounded up, may cause loss of memory, but is easier to maintain
-
-
 
 enum  BlockState{
   BLK_FREE = 0,
@@ -32,20 +29,14 @@ enum{
   MAX_ALLOC_SIZE = BLOCK_SIZE * DATA_PER_MAP,
 };
 
-
 typedef struct BitMap BitMap;
 struct BitMap {
   SIZE_TYPE bitmap[BITS_ARR_LEN];
   BitMap* next_map;
 };
 
-
-
-
 static char* _memory_base = nullptr;
 static SIZE_TYPE _page_size = 0;
-
-
 
 extern SIZE_TYPE get_max_possible_memory_size();
 extern void grow_memory_by_page(int pages);
@@ -91,6 +82,8 @@ static void logint(int val){
 
 //Can and should call this once on initialization
 void allocator_initialize(char* memory_base, SIZE_TYPE page_size){
+  //TODO:: maybe won't happen, but handle the case of memory base being
+  //a valid pointer and also nullptr
   if(_page_size == 0){
     _memory_base = memory_base;
     _page_size = page_size;
@@ -494,7 +487,8 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   //TODO:: A bug is here, that is non conformant behaviour of realloc
   //Even after all this merging, if size isn't enough and need to increase ,
   //which fails, there should be no changes in the original format, which has happened
-  //here 
+  //here
+  LargeMem og_mem = *memptr;
   LargeMem** pmem2 = &large_first_free;
   while((pmem2 = find_intersecting(memptr, pmem2)) != nullptr){
     log_c_str("Going to do some realloc merging");
@@ -556,7 +550,7 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   //When at end, end_point == mem_base + _used_up
   if(end_point == (get_memory_base() + _used_mem)){
     if(!ensure_reserved(_used_mem + new_size - memptr->size)){
-      return nullptr;
+      goto large_alloc_fail;
     }
     memptr->size = new_size;
     return memptr->ptr;
@@ -580,7 +574,7 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   void* new_mem = alloc_mem(new_size);
   if(new_mem == nullptr){
     log_c_str("Large page realloc, alloc larger page failed");
-    return nullptr;
+    goto large_alloc_fail;
   }
   log_c_str("Larger page realloc successful as ");
   logint((int)new_mem);
@@ -590,6 +584,47 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   free_mem(old_mem->ptr);
 
   return new_mem;
+
+ large_alloc_fail:
+  if(og_mem.ptr != memptr->ptr){
+    //Need to do some memmoving
+    {
+      char* ptr1 = memptr->ptr;
+      char* ptr2 = og_mem.ptr;
+      char* ptrn = og_mem.ptr + og_mem.size;
+
+      while(ptr2 < ptrn){
+	if((ptrn - ptr2) > (ptr2 - ptr1)){
+	  memcpy(ptr1, ptr2, ptr2-ptr1);
+	}
+	else{
+	  memcpy(ptr1, ptr2, ptrn-ptr2);
+	}
+	SIZE_TYPE ptrdiff = ptr2 - ptr1;
+	ptr1 = ptr2;
+	ptr2 += ptrdiff;
+      }
+    }
+    //Split the large memory page
+    SIZE_TYPE sz1 = (memptr->ptr + memptr->size) - og_mem.ptr;
+    char* ptr1 = og_mem.ptr;
+    SIZE_TYPE sz2 = og_mem.ptr - memptr->ptr;
+    char* ptr2 = memptr->ptr;
+
+    memptr->ptr = ptr1;
+    memptr->size = sz1;
+
+    //This allocation should not ever fail
+    LargeMem* prev = alloc_mem(sizeof * prev);
+    prev->next = nullptr;
+    prev->ptr = ptr2;
+    prev->size = sz2;
+
+    large_first_free = insert_large_mem_by_size(large_first_free,
+						prev);
+  }
+
+  return nullptr;
 }
 
 
