@@ -61,6 +61,7 @@ async function init() {
     );
     g_instance = instance;
     wins = g_instance.exports;
+    wins.init_wasm();
     ctx.width = canvas.clientWidth;
     ctx.height = canvas.clientHeight;
     console.log('Canvas width : ' + ctx.width + ' Canvas height ' + ctx.height);

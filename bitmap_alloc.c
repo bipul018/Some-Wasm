@@ -12,6 +12,8 @@ typedef _Bool bool;
 //Make a bit map allocator , each block with 2 bits information
 //Block size is fixed, and always rounded up, may cause loss of memory, but is easier to maintain
 
+
+
 enum  BlockState{
   BLK_FREE = 0,
   BLK_USED = 1,
@@ -20,45 +22,6 @@ enum  BlockState{
 
 /* char _memory[1024 * 1024 * 10] = {0}; */
 /* const SIZE_TYPE page_size = 128; */
-
-
-//TODO:: Later these two cannot be a function, it should be a const variable or something
-//Which is once initialized only
-extern char* get_memory_base();
-extern SIZE_TYPE get_page_size();
-
-extern SIZE_TYPE get_max_possible_memory_size();
-extern void grow_memory_by_page(int pages);
-extern void* memcpy(void* restrict dest, const void* restrict src, SIZE_TYPE count);
-
-//This is the amount of memory taken already, is strictly <=
-//_reserved_mem and is aligned to a map struct size + max map refrenceably memory size
-static SIZE_TYPE _used_mem = 0;
-//static SIZE_TYPE used_mem = 0;
-//This is the amount of memory taken already and that is
-//aligned to page boundary
-static SIZE_TYPE _reserved_mem = 0;
-
-//Grows the memory , makes sure that reserved is >= used
-static bool ensure_reserved(void){
-
-  SIZE_TYPE new_res = (_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
-
-  if(new_res > _reserved_mem){
-    if(new_res > get_max_possible_memory_size()){
-      return false;
-    }
-    
-    SIZE_TYPE more_pages = (new_res - _reserved_mem) /get_page_size();
-    grow_memory_by_page(more_pages);
-    _reserved_mem = new_res;
-  }
-  return true;
-}
-
-
-
-
 
 //Allocate some pages, in that allocate some regions for bitmap and next pointer of bitmap
 enum{
@@ -75,6 +38,26 @@ struct BitMap {
   SIZE_TYPE bitmap[BITS_ARR_LEN];
   BitMap* next_map;
 };
+
+
+
+
+static char* _memory_base = nullptr;
+static SIZE_TYPE _page_size = 0;
+
+
+
+extern SIZE_TYPE get_max_possible_memory_size();
+extern void grow_memory_by_page(int pages);
+extern void* memcpy(void* restrict dest, const void* restrict src, SIZE_TYPE count);
+
+//This is the amount of memory taken already, is strictly <=
+//_reserved_mem and is aligned to a map struct size + max map refrenceably memory size
+static SIZE_TYPE _used_mem = 0;
+//static SIZE_TYPE used_mem = 0;
+//This is the amount of memory taken already and that is
+//aligned to page boundary
+static SIZE_TYPE _reserved_mem = 0;
 
 
 #ifdef DEBUG
@@ -105,6 +88,48 @@ static void logint(int val){
   (void)val;
 }
 #endif
+
+//Can and should call this once on initialization
+void allocator_initialize(char* memory_base, SIZE_TYPE page_size){
+  if(_page_size == 0){
+    _memory_base = memory_base;
+    _page_size = page_size;
+  }
+}
+static char* get_memory_base(){
+  return _memory_base;
+}
+static SIZE_TYPE get_page_size(){
+  return _page_size;
+}
+
+
+//Grows the memory , makes sure that reserved is >= used
+static bool ensure_reserved(SIZE_TYPE used_upto){
+  
+  if(get_page_size() == 0){
+    log_c_str("Zero memory page size provided");
+    return false;
+  }
+  
+  SIZE_TYPE new_res = (used_upto + get_page_size() - 1) & ~(get_page_size() - 1);
+
+  if(new_res > _reserved_mem){
+    if(new_res > get_max_possible_memory_size()){
+      return false;
+    }
+    
+    SIZE_TYPE more_pages = (new_res - _reserved_mem) /get_page_size();
+    grow_memory_by_page(more_pages);
+    _reserved_mem = new_res;
+  }
+  _used_mem = used_upto;
+  return true;
+}
+
+
+
+
 
 
 static BitMap* first_map = nullptr;
@@ -248,16 +273,15 @@ static void* alloc_large_mem(SIZE_TYPE size){
     log_c_str("New used mem is of value : ");
     logint((int)new_used_mem);
     //new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
-    if(new_used_mem > get_max_possible_memory_size()){
-      free_mem(new_large);
-      return nullptr;
-    }
 
     //Bump memory
     //grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
-    _used_mem = new_used_mem;
+    //_used_mem = new_used_mem;
     //Okay to not check ensure i guess
-    ensure_reserved();
+    if(!ensure_reserved(new_used_mem)){
+      free_mem(new_large);
+      return nullptr;
+    }
     log_c_str("Ensure add reserved");
     
     new_large->next = nullptr;
@@ -308,14 +332,13 @@ static BitMap* one_more_map(){
 
   SIZE_TYPE new_used_mem = aligned_used_mem + sizeof(BitMap);
   //new_used_mem = (new_used_mem + get_page_size() - 1) & ~(get_page_size() - 1);
-  
-  if(new_used_mem > get_max_possible_memory_size())
-    return nullptr;
 
   //Bump memory
   //grow_memory_by_page((new_used_mem - used_mem) / get_page_size());
-  _used_mem = new_used_mem;
-  ensure_reserved();
+  //_used_mem = new_used_mem;
+  if(!ensure_reserved(new_used_mem)){
+    return nullptr;
+  }
 
     
   BitMap* next_thing =(BitMap*)(get_memory_base() + aligned_used_mem);
@@ -400,9 +423,8 @@ void* alloc_mem(SIZE_TYPE mem){
     //SIZE_TYPE new_pages = new_mem / get_page_size();
     //grow_memory_by_page(new_pages);
     //used_mem += new_pages * get_page_size();
-    _used_mem += new_mem;
-    if(!ensure_reserved()){
-      _used_mem -= new_mem;
+    //_used_mem += new_mem;
+    if(!ensure_reserved(_used_mem + new_mem)){
       return nullptr;
     }
   }
@@ -533,17 +555,11 @@ static void* realloc_large_mem(LargeMem* memptr, SIZE_TYPE new_size){
   char* end_point = memptr->ptr + memptr->size;
   //When at end, end_point == mem_base + _used_up
   if(end_point == (get_memory_base() + _used_mem)){
-
-    SIZE_TYPE tmp_used = _used_mem;
-    _used_mem += new_size - memptr->size;
-    if(ensure_reserved()){
-      memptr->size = new_size;
-      return memptr->ptr;
-    }
-    else{
-      _used_mem = tmp_used;
+    if(!ensure_reserved(_used_mem + new_size - memptr->size)){
       return nullptr;
     }
+    memptr->size = new_size;
+    return memptr->ptr;
   }
   
   

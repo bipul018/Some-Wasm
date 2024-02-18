@@ -1,22 +1,20 @@
 extern unsigned char __heap_base;
-
 typedef unsigned int uint;
 
+//Allocator provided functions 
+extern void* alloc_mem(SIZE_TYPE mem);
+extern void free_mem(void* mem_ptr);
+extern void allocator_initialize(char* memory_base, SIZE_TYPE page_size);
+
+//Initialize function 
+void init_wasm(){
+  allocator_initialize((char*)(&__heap_base), 64*1024);
+}
 
 //External functions for allocator
-uint base_heap_pointer = (uint)&__heap_base;
-
-char* get_memory_base(){
-  return (char*)base_heap_pointer;
-}
-
-uint get_page_size(){
-  return 64 * 1024;
-}
-
 //A little less than a GB
 uint get_max_possible_memory_size(){
-  return 3U * 1024U * 1024U * 1024U - base_heap_pointer;
+  return 3U * 1024U * 1024U * 1024U - (uint)(&__heap_base);
 }
 
 extern void grow_memory_by_page(int pages);
@@ -37,9 +35,6 @@ void* memcpy(void* restrict dest, const void* restrict src, uint count){
   return dest;
 }
 
-//Allocator allocation functions
-extern void* alloc_mem(SIZE_TYPE mem);
-extern void free_mem(void* mem_ptr);
 
 #define nullptr ((void*)0)
 
