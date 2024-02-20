@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <style> 
+      .prevent-select {
+          user-select: none;
+          -moz-user-select: none;
+          -khtml-user-select: none;
+          -webkit-user-select: none;
+          -o-user-select: none;
+	  -webkit-user-select: none; /* Safari */
+	  -ms-user-select: none; /* IE 10 and IE 11 */
+	  user-select: none; /* Standard syntax */
+      }
+    </style>
+    <title>
+      Bayesian Network
+    </title>
+  </head>
+  <body>
+    <button id = "add_node">
+      Make a div
+    </button>
+    <button id = "reset_selection">
+      Reset Indexes
+    </button>
+    <button id = "join_node">
+      Join Divs
+    </button>
+    <input id="new_node_name" type="text" required placeholder="New Node Name"/>
+    <div id = "curr_nodes">
+    </div>
+    <br/>
+      
+    <canvas id = "canv"  >
+
+    </canvas>
+
+    <div id="all_nodes">
+
+    </div>
+
+    <div id = "table_place">
+    </div>
+    <script src = "divs.js">
+    </script>
+    <script src = "wasm.js">
+
+    </script>
+    <script src = "bayes.js">
+    </script>
+	    
+
+
+  </body>
+</html>

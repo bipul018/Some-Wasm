@@ -49,7 +49,7 @@ static SIZE_TYPE _used_mem = 0;
 //This is the amount of memory taken already and that is
 //aligned to page boundary
 static SIZE_TYPE _reserved_mem = 0;
-
+#undef DEBUG
 
 #ifdef DEBUG
 extern void log_c_str(const char* cstr);
@@ -704,8 +704,8 @@ void* realloc_mem(void* memptr, SIZE_TYPE new_size){
   if(new_size > size){
     //SIZE_TYPE diff = new_size - size;
     //diff /= BLOCK_SIZE;
-    for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < new_size / BLOCK_SIZE; ++i){
-      if(get_nth(map->bitmap, i) != BLK_FREE){
+    for(SIZE_TYPE i = inx + size / BLOCK_SIZE;  i < (inx + new_size / BLOCK_SIZE); ++i){
+      if((i >= DATA_PER_MAP) || get_nth(map->bitmap, i) != BLK_FREE){
 	//Need to allocate more memory
 	void* new_mem = alloc_mem(new_size);
 	if(new_mem == nullptr)
@@ -716,7 +716,7 @@ void* realloc_mem(void* memptr, SIZE_TYPE new_size){
 	return new_mem;
       }
     }
-    for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < new_size / BLOCK_SIZE; ++i){
+    for(SIZE_TYPE i = inx + size / BLOCK_SIZE; i < (inx + new_size / BLOCK_SIZE); ++i){
       set_nth(map->bitmap, i,  BLK_EXTEND);
     }
     return memptr;
