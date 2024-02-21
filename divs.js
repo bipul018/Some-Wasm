@@ -111,6 +111,52 @@ function draw_arrow(ctx, fromx, fromy, tox, toy, head_len){
     ctx.strokeStyle = prevstroke;
     ctx.lineWidth = prevwid;
 }
+function onTouch(evt) {
+  evt.preventDefault();
+  if (
+    evt.touches.length > 1 ||
+    (evt.type === "touchend" && evt.touches.length > 0)
+  )
+    return;
+
+  const newEvt = document.createEvent("MouseEvents");
+  let type = null;
+  let touch = null;
+
+  switch (evt.type) {
+    case "touchstart":
+      type = "mousedown";
+      touch = evt.changedTouches[0];
+      break;
+    case "touchmove":
+      type = "mousemove";
+      touch = evt.changedTouches[0];
+      break;
+    case "touchend":
+      type = "mouseup";
+      touch = evt.changedTouches[0];
+      break;
+  }
+
+  newEvt.initMouseEvent(
+    type,
+    true,
+    true,
+    evt.originalTarget.ownerDocument.defaultView,
+    0,
+    touch.screenX,
+    touch.screenY,
+    touch.clientX,
+    touch.clientY,
+    evt.ctrlKey,
+    evt.altKey,
+    evt.shiftKey,
+    evt.metaKey,
+    0,
+    null,
+  );
+  evt.originalTarget.dispatchEvent(newEvt);
+}
 
 function create_drag_parent(elem){
     const obj =  {
@@ -147,15 +193,26 @@ function create_drag_parent(elem){
 	    item.dispatchEvent(event);
 	});
 	item.addEventListener('pointerdown', function(e){
+	    console.log('pointer down event');
 	    obj.curr_obj = item;
 	    document.removeEventListener('pointermove', obj.move_func);
 	    document.addEventListener('pointermove', obj.move_func);
 	})
+	item.addEventListener('pointerleave', function(e){
+	    console.log('Item pointer leave');
+	});
 	item.className = item.className + ' prevent-select';
     };
     document.addEventListener('pointerup', function(e){
+	console.log('pointer up event');
 	document.removeEventListener('pointermove', obj.move_func);
 	obj.curr_obj = null;
+    });
+    document.addEventListener('pointercancel', function(e){
+	console.log('pointer canceled');
+    });
+    document.addEventListener('pointerout', function(e){
+	console.log('pointer out event');
     });
     return obj;
 }
