@@ -1,57 +1,46 @@
-This is my first ever project with wasm.
-This project contains two parts, a simple http server written in C using Windows websockets,
-another is a client web application written in C wasm, html and js
+This is my first ever project with wasm, now modded into AI project on bayesian network.
 
-If you don't have windows, you can still use other tools that function similar to this toy webserver {like in python }
-
-Purposes of files : 
+This is a client side only webproject, but since one needs to serve wasm files to run,
+you need to have a simple http server mechanism for running this app.
 
 
-bitmap_alloc.c :
+Compilation of app:
+-- To compile the web app only, a batch script is provided, named 'compile-wasm.bat'. As long as you have clang on your system and it is on path, it can compile wasm, even on android in termux.
 
-   This is my first ever pathetic attempt at a general purpose allocator, not thread safe at all. 
-   This file is independent and only requires a few extern functions to work properly, but it assumes the underlying memory region is contiguous, which is quite fitting for wasm and also works for other linux systems with brk() sbrk() family.
-
-
-bitmap2.c :
-
-    This file is a test implementation of bitmap_alloc.c in plain C.
-    Compilation instructions are not explicitly provided for this file though.
-    Maybe later will be provided, or this file will be entirely removed.
+-- A simple HTTP server app written in C is also available for windows platform, which can be compiled along with wasm app by 'compile.bat' batch script
 
 
-simple_serv.c :
+Using the app:
 
-    This file is the simple HTTP server written to serve the wasm file to the browser, along with html file, as browsers cannot simply load such binaries. It is written with Win32 API in mind, but if needed translating to posix sockets shouldnot be that hard.
+-- This app can be used as long as there is any simple HTTP server app in the system and you know how to run it.
+-- There are two methods tested, which are :
+-- Method 1: Using python, if you have python 3 or greater, then simply open any command window in the folder of this app, and run
+    python -m http.server 12706
+
+-- Method 2: If you are on windows, and have compiled the simple_server.c file, you can use the 'run.bat' batch script to run the http server. You can also use the simple_server.exe executable directly, it just requires port number as first argument, then a pair of HTTP response mime types and corresponding files to serve. In the 'run.bat', it is setup so that webapp serves also at the port address 12706.
+
+-- After either of these processes, the webapp will be served on port 12706, so you can access the webapp by simply going to browser to 'localhost:12706'.
+
+If you want to 'browse' the app source codes:
+
+index.html :
+-- This is the only html file, that declares some div elements, a canvas element and loads the relevant js files.
+
+wasm.js :
+-- This is the wasm interface helper js file that only sets up loading and providing some functions that help with interoperability with the C struct used in webapp.
+
+divs.js :
+-- This is a collection of some js functions used in making the visualizations.
+
+bayes.js :
+-- This is the main visualization file. In this file is where the visualization logic relevant to the bayesian network is written. This file communicates with the wasm module using some helper functions in wasm.js and is reponsible for maintaing the correct correspondance between C and js.
+
+bitmap_alloc.c , t1.c and t1.h :
+-- Since this is also my first wasm project, and I have not used any external libraries, not even the standard libraries in C, these 3 files help to setup some of the necessary components, like dynamic memory allocation in C, some memory copying functions, and some functions to log stuff to the js console. Not required at all if you are interested only in bayesian network.
+
+bayes.c :
+-- This file is currently the entirety of the bayesian network logic. This code is reponsible for handling the creation of nodes and creation of directed edge between the nodes when instructed by the js component. Currently no bayesian network inference logic is built.
 
 
-t1.c :
-
-    This is the main wasm file that the browser loads.
-    There is no emscripten used, no standatd library used, as this was just a learning attempt, and as such is free of such bloat for now.
-    The compilation was done by clang in windows, but should work anywhere if proper flags are provided.
-    This assumes wasm32, which is current default wasm, so don't compile as wasm64.
-
-
-t1.html :
-
-    This is the host html file for wasm.
-
-
-t1.js :
-
-    This is the js driver code for wasm. It actually sets up wasm interface, sets the timers and calls the C functions in said time intervals
-
-
-compile.bat :
-
-    This batch file compiles the simple_serv.c, as normal C executable (simple_serv.exe) and t1.c as a wasm file (t1.wasm) later loaded by t1.html.
-    If in windows and clang is in path, and hoping that clang comes with wasm32, {which is defualt I think} , just run this batch file to compile both
-
-
-run.bat :
-
-    This file starts up the http server at port 12706.
-    Just goto localhost:12706 after this runs.
-    This simply provies t1.html and t1.wasm as arguments to simple_serv.exe.
-    
+simple_server.c :
+-- As mentioned earlier, this if a file that sets up a simple http server for windows platform only. This uses windows socket programming to setup the server. This code is irrevalant if you are using linux or python's server. 
