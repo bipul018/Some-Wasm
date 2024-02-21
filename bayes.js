@@ -70,8 +70,8 @@ let id1 = -1;
 let id2 = -1;
 
 function update_nodes_text(){
-    const obj1 = decode_bayes_nodes(inx1);
-    const obj2 = decode_bayes_nodes(inx2);
+    const obj1 = decode_bayes_nodes(id1);
+    const obj2 = decode_bayes_nodes(id2);
     if(obj1 != null)
 	var name1 = obj1.node_name;
     else

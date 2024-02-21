@@ -146,14 +146,14 @@ function create_drag_parent(elem){
 //					   dy : next.right - prev.right});
 	    item.dispatchEvent(event);
 	});
-	item.addEventListener('mousedown', function(e){
+	item.addEventListener('pointerdown', function(e){
 	    obj.curr_obj = item;
 	    document.removeEventListener('mousemove', obj.move_func);
 	    document.addEventListener('mousemove', obj.move_func);
 	})
 	item.className = item.className + ' prevent-select';
     };
-    document.addEventListener('mouseup', function(e){
+    document.addEventListener('pointerup', function(e){
 	document.removeEventListener('mousemove', obj.move_func);
 	obj.curr_obj = null;
     });
@@ -168,7 +168,7 @@ let scroll_prev_pos={
     x:0,
     y:0
 };
-document.addEventListener('mousemove', function(e){
+document.addEventListener('pointermove', function(e){
     mouse_pos.x = e.x;
     mouse_pos.y = e.y;
 });
