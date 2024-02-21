@@ -35,6 +35,7 @@ int create_new_node(const char* node_name){
 				      sizeof(BayesNode));
   if(added_node == nullptr)
     return -1;
+  added_node->prob_dist = alloc_mem(sizeof(float));
   if(added_node != nodes){
     //dbg_log_c_str("Pointer changed");
   }
@@ -46,10 +47,15 @@ int create_new_node(const char* node_name){
   added_node->node_id = node_count - 1;
   added_node->node_name = node_name;
   added_node->parent_count = 0;
-  added_node->prob_dist = nullptr;
   added_node->parents = nullptr;
-
-  
+  added_node->prob_dist = alloc_mem(sizeof(float));
+  if(added_node->prob_dist == nullptr){
+    log_c_str("Allocation error in allocating single probability item, Ignoring for now");
+  }
+  else{
+    added_node->prob_dist[0] = 1.f;
+  }
+    
   //dbg_log_c_str("Logging all the nodes after");
   for(size_t i = 0; i < node_count; ++i){
     //dbg_log_c_str(nodes[i].node_name);

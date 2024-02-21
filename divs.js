@@ -1,4 +1,15 @@
-
+function get_bounding_rect(elem){
+    const rbody = document.body.getBoundingClientRect();
+    const relem = elem.getBoundingClientRect();
+    return {
+	top: relem.top - rbody.top,
+	left: relem.left - rbody.left,
+	width: relem.width,
+	height: relem.height,
+	right: relem.left - rbody.left + relem.width,
+	bottom: relem.top - rbody.top + relem.height
+    };
+}
 //top bottom left right based rect
 //But right >= left, bottom >= top
 function get_closest_line(rect1, rect2){
@@ -41,13 +52,14 @@ function get_closest_line(rect1, rect2){
 
 function translateit(elem, dx, dy){
     const offs = elem.getBoundingClientRect();
+    elem.style.position = 'fixed';
     elem.style.left = (offs.left + dx) + "px";
     elem.style.top = (offs.top + dy) + "px";
 }
 
 function fix_one_in_other(inner_elem, bound_elem){
-    const bound = bound_elem.getBoundingClientRect();
-    const inner = inner_elem.getBoundingClientRect();
+    const bound = get_bounding_rect(bound_elem);
+    const inner = get_bounding_rect(inner_elem);
 
     if(inner.left < bound.left){
 	translateit(inner_elem, bound.left - inner.left, 0);
@@ -109,10 +121,10 @@ function create_drag_parent(elem){
     }
     obj.move_func = function(e){
 	if(null != obj.curr_obj){
-	    const prev = obj.curr_obj.getBoundingClientRect();
+	    const prev = get_bounding_rect(obj.curr_obj);
 	    translateit(obj.curr_obj, e.movementX, e.movementY);
 	    fix_one_in_other(obj.curr_obj, obj.own);
-	    const next = obj.curr_obj.getBoundingClientRect();
+	    const next = get_bounding_rect(obj.curr_obj);
 	    const event = new CustomEvent('mouse_drag',
 					  {bubbles: true,
 					   detail: {dax : -1, day : 29}});
@@ -122,6 +134,18 @@ function create_drag_parent(elem){
 	}
     };
     obj.make_draggable = function(item){
+	item.style.position = 'fixed';
+	document.addEventListener('scroll', function(e){
+	    translateit(item, e.scrollX, e.scrollY);
+	    fix_one_in_other(item, obj.own);
+	    const next = get_bounding_rect(item);
+	    const event = new CustomEvent('mouse_drag',
+					  {bubbles: true,
+					   detail: {dax : -1, day : 29}});
+//					  {dx : next.left - prev.left,
+//					   dy : next.right - prev.right});
+	    item.dispatchEvent(event);
+	});
 	item.addEventListener('mousedown', function(e){
 	    obj.curr_obj = item;
 	    document.removeEventListener('mousemove', obj.move_func);
@@ -140,14 +164,19 @@ let mouse_pos={
     x:0,
     y:0
 };
-
-
+let scroll_prev_pos={
+    x:0,
+    y:0
+};
 document.addEventListener('mousemove', function(e){
     mouse_pos.x = e.x;
     mouse_pos.y = e.y;
 });
 
-
+document.addEventListener('scrollend', function(e){
+    scroll_prev_pos.x = window.scrollX;
+    scroll_prev_pos.y = window.scrollY;
+});
 
 function process_table_cell(cell_thing){
     var cell = null;

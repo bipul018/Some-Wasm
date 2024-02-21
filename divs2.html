@@ -12,6 +12,7 @@
 	  -ms-user-select: none; /* IE 10 and IE 11 */
 	  user-select: none; /* Standard syntax */
       }
+
     </style>
     <title>
       Bayesian Network
@@ -19,18 +20,19 @@
   </head>
   <body>
     <button id = "add_node">
-      Make a div
+      Create Node
     </button>
     <button id = "reset_selection">
-      Reset Indexes
+      Reset Selections
     </button>
     <button id = "join_node">
-      Join Divs
+      Create Edge
     </button>
     <input id="new_node_name" type="text" required placeholder="New Node Name"/>
     <div id = "curr_nodes">
+      No Node Selected
     </div>
-    <br/>
+    
       
     <canvas id = "canv"  >
 
@@ -40,7 +42,7 @@
 
     </div>
 
-    <div id = "table_place">
+    <div id = "table_place" style="background-color:rgba(255,255,255,0.2);">
     </div>
     <script src = "divs.js">
     </script>

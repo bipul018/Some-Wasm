@@ -1,8 +1,10 @@
+
 const canv = document.getElementById('canv');
 //canv.width = window.innerWidth;
 //canv.height = window.innerHeight;
-canv.width = 600;
-canv.height = 550;
+canv.width = 700;
+canv.height = 850;
+const document_dragger = create_drag_parent(document.body);
 const canv_dragger = create_drag_parent(canv);
 
 //Each element will be id: (int) and obj: (an html dom div object)
@@ -27,8 +29,8 @@ function draw_canvas(){
     ctx.rect(0, 0, canv.width, canv.height);
     ctx.fillStyle = "blue";
     ctx.fill();
-    const cx = canv.getBoundingClientRect().left;
-    const cy = canv.getBoundingClientRect().top;
+    const cx = get_bounding_rect(canv).left;
+    const cy = get_bounding_rect(canv).top;
 
     for(var i = 0; i < divs.length; i++){
 	const div_id = divs[i].id;
@@ -36,7 +38,7 @@ function draw_canvas(){
 	if(node == null)
 	    continue;
 
-	const child_rect = divs[i].obj.getBoundingClientRect();
+	const child_rect = get_bounding_rect(divs[i].obj);
 	
 	const parents = new Int32Array(
 	    wasm.memory.buffer,
@@ -47,7 +49,7 @@ function draw_canvas(){
 	    const parent = find_div_by_id(parents[j]);
 	    if(parent == null)
 		continue;
-	    const parent_rect = parent.obj.getBoundingClientRect();
+	    const parent_rect = get_bounding_rect(parent.obj);
 	    
 	    const line = get_closest_line(parent_rect, child_rect);
 	    ctx.strokeStyle = 'white';
@@ -89,6 +91,8 @@ document.getElementById('join_node').addEventListener('click',function(e){
 	}
     }
     draw_canvas();
+    id1 = id2 = -1;
+    update_nodes_text();
 });
 
 
@@ -136,6 +140,9 @@ document.getElementById('add_node').addEventListener('click',function(e){
 });
 
 const table_div = document.getElementById('table_place');
+document_dragger.make_draggable(table_div);
+table_div.style.top = (get_bounding_rect(canv).top) + 'px';
+table_div.style.left = (get_bounding_rect(canv).left + get_bounding_rect(canv).width - 200) + 'px'; 
 var table_elem = null;
 var table_id = -1;
 
@@ -170,9 +177,8 @@ function create_prob_table(id){
 	node.parents,
 	node.parent_count);
     for(var j = 0; j < node.parent_count; j++){
-	const parent = find_div_by_id(parents_view[j]);
-	if(parent != null)
-	    parents.push(parent);
+	const parent = decode_bayes_nodes(parents_view[j]);
+	parents.push(parent.node_name);
     }
     const tble_head_row = [[
 	{textContent : "Combinations", isth : true},
@@ -216,6 +222,7 @@ function create_prob_table(id){
     }
     table_div.replaceChildren();
     table_elem = make_table(tble_head_row, tble_head_col, tble_vals);
+    
     table_div.appendChild(table_elem);
 }
 
