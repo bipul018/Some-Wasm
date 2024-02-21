@@ -148,13 +148,13 @@ function create_drag_parent(elem){
 	});
 	item.addEventListener('pointerdown', function(e){
 	    obj.curr_obj = item;
-	    document.removeEventListener('mousemove', obj.move_func);
-	    document.addEventListener('mousemove', obj.move_func);
+	    document.removeEventListener('pointermove', obj.move_func);
+	    document.addEventListener('pointermove', obj.move_func);
 	})
 	item.className = item.className + ' prevent-select';
     };
     document.addEventListener('pointerup', function(e){
-	document.removeEventListener('mousemove', obj.move_func);
+	document.removeEventListener('pointermove', obj.move_func);
 	obj.curr_obj = null;
     });
     return obj;
