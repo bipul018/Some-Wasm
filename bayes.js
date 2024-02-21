@@ -70,8 +70,20 @@ let id1 = -1;
 let id2 = -1;
 
 function update_nodes_text(){
+    const obj1 = decode_bayes_nodes(inx1);
+    const obj2 = decode_bayes_nodes(inx2);
+    if(obj1 != null)
+	var name1 = obj1.node_name;
+    else
+	var name1 = ''
+    if(obj2 != null)
+	var name2 = obj2.node_name;
+    else
+	var name2 = ''
+
     document.getElementById('curr_nodes').textContent =
-	'Inx 1 is ' + id1 + ' and Inx 2 is ' + id2;
+	'First selection id is  ' + id1 +" named '" +name1 +
+	"' and second id is " + id2 + " named '" + name2 + "'";
 }
 document.getElementById('reset_selection').addEventListener('click',function(e){
     id1 = id2 = -1;
