@@ -31,5 +31,11 @@ void* memcpy(void* restrict dest, const void* restrict src, uint count){
   return dest;
 }
 
-
-#define nullptr ((void*)0)
+size_t strlen(const char* str){
+  size_t count = 0;
+  while(*str){
+    str++;
+    count++;
+  }
+  return count;
+}

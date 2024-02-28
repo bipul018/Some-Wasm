@@ -193,26 +193,26 @@ function create_drag_parent(elem){
 	    item.dispatchEvent(event);
 	});
 	item.addEventListener('pointerdown', function(e){
-	    console.log('pointer down event');
+	    //console.log('pointer down event');
 	    obj.curr_obj = item;
 	    document.removeEventListener('pointermove', obj.move_func);
 	    document.addEventListener('pointermove', obj.move_func);
 	})
 	item.addEventListener('pointerleave', function(e){
-	    console.log('Item pointer leave');
+	    //console.log('Item pointer leave');
 	});
 	item.className = item.className + ' prevent-select';
     };
     document.addEventListener('pointerup', function(e){
-	console.log('pointer up event');
+	//console.log('pointer up event');
 	document.removeEventListener('pointermove', obj.move_func);
 	obj.curr_obj = null;
     });
     document.addEventListener('pointercancel', function(e){
-	console.log('pointer canceled');
+	//console.log('pointer canceled');
     });
     document.addEventListener('pointerout', function(e){
-	console.log('pointer out event');
+	//console.log('pointer out event');
     });
     return obj;
 }
