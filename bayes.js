@@ -9,8 +9,8 @@ const canv_dragger = create_drag_parent(canv);
 
 //Each element will be id: (int) and obj: (an html dom div object) and
 //             and additional entry for joint probability
-//             evaluation : desire_true, and is_required
-//             both boolean
+//             evaluation : desire_true, is_required, is_evidence
+//             all boolean
 let divs = [];
 
 function find_div_by_id(id){
@@ -111,30 +111,38 @@ document.getElementById('join_node').addEventListener('click',function(e){
     update_nodes_text();
 });
 
+function calculate_probability(){
+    const allocd = wasm.alloc_mem(divs.length * wasm.get_joint_entry_size());
+    if(allocd == 0){
+	console.log("Couldn't allocate memory for joint probability operation");
+	return null;
+    }
+    const stride = wasm.get_joint_entry_size() / 4;
+    const input_view = new Int32Array(
+	wasm.memory.buffer,
+	allocd,
+	divs.length * stride);
+
+    for(var i = 0; i < divs.length; ++i){
+	//desire_true
+	input_view[stride*i] = divs[i].desire_true?1:0;
+	//is_required
+	input_view[stride*i+1] = divs[i].is_required?1:0;
+	//is_evidence
+	input_view[stride*i+2] = divs[i].is_evidence?1:0;
+	console.log('For ' + i +' : ' +
+		    input_view[stride*i], input_view[stride*i+1],
+		    input_view[stride*i+2]);
+    }
+    const result = wasm.process_conditional(allocd);
+    console.log("The value obtained was : " + result);
+    wasm.free_mem(allocd);
+    return result;
+}
+
 document.getElementById("find_joint_prob").
     addEventListener('click',function(e){
-	const allocd = wasm.alloc_mem(divs.length * 4 * 2);
-	if(allocd == 0){
-	    console.log("Couldn't allocate memory for joint probability operation");
-	    return null;
-	}
-
-	const input_view = new Int32Array(
-	    wasm.memory.buffer,
-	    allocd,
-	    divs.length * 2);
-
-	for(var i = 0; i < divs.length; ++i){
-	    //desire_true
-	    input_view[2*i] = divs[i].desire_true?1:0;
-	    //is_required
-	    input_view[2*i+1] = divs[i].is_required?1:0;
-	}
-	console.log('The int val array going to be used : ' + input_view);
-	const result = wasm.process_joint(allocd);
-	console.log("The value obtained was : " + result);
-	wasm.free_mem(allocd);
-	return result;
+	calculate_probability();
     });
 
 
@@ -146,40 +154,81 @@ function bind_div_to_node(c_obj_id){
     const new_obj = document.createElement('div');
     new_obj.textContent = node_obj.node_name;
     const div_obj = {};
-    //Add a check mark for fixing as evidence
+    
+    //Add a radio for setting as hypothesis or evidence or neutral
+    // P ( H1, H2,... | E1, E2, ...)
     new_obj.appendChild(document.createElement('br'));
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.checked = new_obj.has_evidence;
-    check.id = 'node_checkbox_for' + c_obj_id;
-    check.addEventListener('change', function(e){
-	console.log("In the 'change' one " + c_obj_id);
-	const val = decode_bayes_nodes(c_obj_id);
-	if(val.has_evidence){
-	    wasm.reset_has_evidence(c_obj_id);
-	}
-	else{
-	    wasm.set_has_evidence(c_obj_id);
-	}
-	if(id1 == c_obj_id){
-	    create_prob_table(c_obj_id);
+    const hypothesis_button = document.createElement('input');
+    hypothesis_button.type = 'radio';
+    hypothesis_button.id = 'node_radio_hypothesis_for'+c_obj_id;
+    hypothesis_button.name = 'node_radio_group1_for' + c_obj_id;
+    hypothesis_button.addEventListener('change', (e)=>{
+	if(hypothesis_button.checked){
+	    div_obj.is_evidence = false;
+	    div_obj.is_required = true;
 	}
     });
-    new_obj.appendChild(check);
-    const check_label = document.createElement('label');
-    check_label['for'] = check.id;
-    check_label.textContent = 'Has Evidence';
-    new_obj.appendChild(check_label);
-
     
-    //Add radiobuttons
+    const hypothesis_label = document.createElement('label');
+    hypothesis_label['for'] = hypothesis_button.id;
+    hypothesis_label.textContent = 'As Hypothesis';
+
+    const evidence_button = document.createElement('input');
+    evidence_button.type = 'radio';
+    evidence_button.id = 'node_radio_evidence_for' + c_obj_id;
+    evidence_button.name = hypothesis_button.name;
+    evidence_button.addEventListener('change', (e)=>{
+	if(evidence_button.checked){
+	    div_obj.is_evidence = true;
+	    div_obj.is_required = true;
+	}
+    });
+    
+    const evidence_label = document.createElement('label');
+    evidence_label['for'] = evidence_button.id;
+    evidence_label.textContent = 'As Evidence';
+
+    const neutral_button = document.createElement('input');
+    neutral_button.type = 'radio';
+    neutral_button.id = 'node_radio_neutral_for' + c_obj_id;
+    neutral_button.name = evidence_button.name;
+    neutral_button.checked = true;
+    neutral_button.addEventListener('change', (e)=>{
+	if(neutral_button.checked){
+	    div_obj.is_required = false;
+	}
+	else{
+	    div_obj.is_required = true;
+	}
+    });
+    
+    const neutral_label = document.createElement('label');
+    neutral_label['for'] = neutral_button.id;
+    neutral_label.textContent = "As Don't Care";
+
+    const radio1_div = document.createElement('div');
+    radio1_div.appendChild(hypothesis_button);
+    radio1_div.appendChild(hypothesis_label);
+    radio1_div.appendChild(evidence_button);
+    radio1_div.appendChild(evidence_label);
+    radio1_div.appendChild(neutral_button);
+    radio1_div.appendChild(neutral_label);
+    new_obj.appendChild(radio1_div);
+    //Add event listeners
+    
+    //Add radiobuttons for true or false desire
     new_obj.appendChild(document.createElement('br'));
     
     const false_button = document.createElement('input');
     false_button.type = 'radio';
     false_button.id = 'node_radio_false_for' + c_obj_id;
-    false_button.value = 0;
-    false_button.name = 'node_radio_group_for' + c_obj_id;
+    false_button.name = 'node_radio_group2_for' + c_obj_id;
+    false_button.checked = true;
+    false_button.addEventListener('change', (e)=>{
+	if(false_button.checked){
+	    div_obj.desire_true = false;
+	}
+    });
     const false_label = document.createElement('label');
     false_label['for'] = false_button.id;
     false_label.textContent = 'Choose False';
@@ -187,45 +236,21 @@ function bind_div_to_node(c_obj_id){
     const true_button = document.createElement('input');
     true_button.type = 'radio';
     true_button.id = 'node_radio_true_for' + c_obj_id;
-    true_button.value = 1;
     true_button.name = false_button.name;
+    true_button.addEventListener('change', (e)=>{
+	if(true_button.checked){
+	    div_obj.desire_true = true;
+	}
+    });
     const true_label = document.createElement('label');
     true_label['for'] = true_button.id;
     true_label.textContent = 'Choose True';
-
-    
-    const neutral_button = document.createElement('input');
-    neutral_button.type = 'radio';
-    neutral_button.id = 'node_radio_neutral_for' + c_obj_id;
-    neutral_button.value = 2;
-    neutral_button.name = false_button.name;
-    neutral_button.checked = true;
-    const neutral_label = document.createElement('label');
-    neutral_label['for'] = neutral_button.id;
-    neutral_label.textContent = "Don't Care";
-
-    const change_func = (e)=>{
-	if(false_button.checked)
-	    div_obj.desire_true = false;
-	if(true_button.checked)
-	    div_obj.desire_true = true;
-	if(neutral_button.checked)
-	    div_obj.is_required = false;
-	else
-	    div_obj.is_required = true;
-    };
-    false_button.addEventListener('change', change_func);
-    true_button.addEventListener('change', change_func);
-    neutral_button.addEventListener('change', change_func);
-    const radio_div = document.createElement('div');
-    radio_div.appendChild(false_button);
-    radio_div.appendChild(false_label);
-    radio_div.appendChild(true_button);
-    radio_div.appendChild(true_label);
-    radio_div.appendChild(neutral_button);
-    radio_div.appendChild(neutral_label);
-    
-    new_obj.appendChild(radio_div);
+    const radio2_div = document.createElement('div');
+    radio2_div.appendChild(false_button);
+    radio2_div.appendChild(false_label);
+    radio2_div.appendChild(true_button);
+    radio2_div.appendChild(true_label);
+    new_obj.appendChild(radio2_div);
     
     new_obj.style.position = 'fixed';
     //new_obj.style.width = '50px';
@@ -319,22 +344,6 @@ function create_prob_table(id){
     const tble_vals = [
 
     ];
-    if(node.has_evidence){
-
-	tble_head_col.push([{
-	    textContent: 'Evidence for ' + node.node_name , ith : true}]);
-
-	const entry = document.createElement('input');
-	entry.type = 'number';
-	entry.max = 1.0;
-	entry.min = 0.0;
-	entry.step = 0.01;
-	entry.value = node.evidence_prob;
-	entry.addEventListener('input', function (e){
-	    wasm.set_evidence_prob(node.node_id, Number(entry.value));
-	});
-	tble_vals.push([{child_node : entry}]);
-    }
     const prob_view = new Float32Array(
 	wasm.memory.buffer,
 	node.prob_dists,
@@ -376,7 +385,7 @@ function create_prob_table(id){
 //Set the name for the node
 
 //Each loading object will have almost everything that other side needs
-//id, name, evidenceprob, has evidence bool , then
+//id, name
 //it has a list of parents ids, then a list of probability distributions
 
 //The data loading may change ids though
@@ -390,12 +399,6 @@ function load_data(data_things){
 	if(loaded_ids[i] < 0)
 	    continue;
 	bind_div_to_node(loaded_ids[i]);
-	wasm.set_evidence_prob(loaded_ids[i], data_things[i].evidence_prob);
-	if(data_things.has_evidence)
-	    wasm.set_has_evidence(loaded_ids[i]);
-	else
-	    wasm.reset_has_evidence(loaded_ids[i]);
-	
     }
     function find_by_old_id(old_id){
 	for(var i = 0; i < data_things.length; ++i){
@@ -422,23 +425,23 @@ function load_data(data_things){
 }
 
 const sample_data = [
-    {node_id: 0, name: "Earthquake Happens", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 0, name: "Earthquake Happens",
      parents: [], prob_dists : [0.0]},
-    {node_id: 1, name: "Burglary", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 1, name: "Burglary", 
      parents: [], prob_dists: [0.0]},
-    {node_id: 2, name: "Alarm Rings", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 2, name: "Alarm Rings",
      parents: [0,1], prob_dists: [0.0,0.2,0.5,0.8]},
-    {node_id: 3, name: "John Calls", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 3, name: "John Calls",
      parents: [2], prob_dists: [0.5,0.5]},
-    {node_id: 4, name: "Mary Calls", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 4, name: "Mary Calls",
      parents: [2], prob_dists: [0.2,0.8]}
 ];
 const sprinkler_data = [
-    {node_id: 0, name: "Rain", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 0, name: "Rain", 
      parents: [], prob_dists: [0.2]},
-    {node_id: 1, name: "Sprinkler", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 1, name: "Sprinkler", 
      parents: [0], prob_dists: [0.4,0.01]},
-    {node_id: 2, name: "Grass Wet", has_evidence: false, evidence_prob: 0.0,
+    {node_id: 2, name: "Grass Wet", 
      parents: [0,1], prob_dists: [0.0,0.8,0.9,0.99]}
 ];
 const family_eg = [

@@ -88,10 +88,6 @@ function decode_bayes_node_ptr(node_ptr){
     var obj = {};
     obj.node_id = view[4];
     obj.node_name = from_c_str(view[0]);
-    //Last element of view points to float value
-    obj.evidence_prob = wasm.get_evidence_prob(obj.node_id);
-    //Just after the last element of view is bool value
-    obj.has_evidence = wasm.get_has_evidence(obj.node_id);
     obj.parent_count = view[1];
     obj.prob_dists = view[2];
     obj.parents = view[3];
@@ -140,8 +136,6 @@ function extract_whole_node(node_ptr, node_count){
 	res.push({
 	    node_id: nodes[i].node_id,
 	    name: nodes[i].node_name,
-	    has_evidence: nodes[i].has_evidence,
-	    evidence_prob: nodes[i].evidence_prob,
 	    parents: sides,
 	    prob_dists: probs
 	});

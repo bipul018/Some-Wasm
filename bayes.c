@@ -8,8 +8,6 @@ struct BayesNode {
   float* prob_dist;
   int* parents;
   int node_id;  //Id same with the UI element id
-  float evidence_prob;
-  bool has_evidence;  //Means the probability is fixed
 };
 
 size_t get_bayes_node_size(){
@@ -102,54 +100,6 @@ size_t get_parent_count(int node_id){
   return 0;
 }
 
-bool get_has_evidence_by_ptr(BayesNode* node){
-  if(node != nullptr)
-    return node->has_evidence;
-  dbg_log_c_str("Invalid node id given when trying to get evidence probability");
-  return 0;
-}
-float get_evidence_prob_by_ptr(BayesNode* node){
-  if(node != nullptr)
-    return node->evidence_prob;
-  dbg_log_c_str("Invalid node id given when trying to get has evidence bool");
-  return false;
-}
-//Warning, also returns 0 for invalid node
-float get_evidence_prob(int node_id){
-  //dbg_log_c_str("Requested probability for id : ");
-  //dbg_logint(node_id);
-  BayesNode* node = find_node(node_id);
-  return get_evidence_prob_by_ptr(node);
-}
-
-void set_evidence_prob(int node_id, float value){
-  //  dbg_log_c_str("Requested evidence value for id : ");
-  //dbg_logint(node_id);
-  //dbg_logdouble(value);
-  BayesNode* node = find_node(node_id);
-  dbg_logint((int)node);
-  if(node != nullptr){
-    node->evidence_prob = value;
-    dbg_logdouble(node->evidence_prob);
-  }
-}
-//Warning, also returns false for invalid node
-bool get_has_evidence(int node_id){
-  BayesNode* node = find_node(node_id);
-  return get_has_evidence_by_ptr(node);
-}
-void set_has_evidence(int node_id){
-  BayesNode* node = find_node(node_id);
-  if(node != nullptr)
-    node->has_evidence = true;
-  dbg_log_c_str("In set has evidence " );
-  dbg_logint(node_id);
-}
-void reset_has_evidence(int node_id){
-  BayesNode* node = find_node(node_id);
-  if(node != nullptr)
-    node->has_evidence = false;
-}
 
 bool insert_edge(int parent_node, int child_node){
   
@@ -341,71 +291,73 @@ typedef struct JointEntry JointEntry;
 struct JointEntry {
   int desire_true;    //This bit tells if node is to bet taken true or false
   int is_required;    //This bit tells if node is processed
+  int is_evidence;    //This bit tells if the node is evidence or hypothesis
 };
 
-double process_one(JointEntry* list, int node_inx){
-  if(!list[node_inx].is_required)
-    return 0.0;
-  //Case has evidence
-  if(all_nodes[node_inx].has_evidence){
-    if(list[node_inx].desire_true)
-      return all_nodes[node_inx].evidence_prob;
-    else
-      return 1.0- all_nodes[node_inx].evidence_prob;
-  }
+size_t get_joint_entry_size(void){
+  return sizeof(JointEntry);
+}
 
-
+double process_one(int node_inx, JointEntry* true_false){
+  
   //For each combination of parent, find if that satisfies
   uint prob_count = all_nodes[node_inx].parent_count;
   prob_count = ((uint)1 << prob_count);
 
-  double res = 0.0;
-  //Find the number of parents in list
-  size_t list_parents = 0;
-  for(size_t i = 0; i < all_nodes[node_inx].parent_count; ++i){
+  //Find the index of the probability value required
+  uint prob_inx = 0;
+  for(size_t i = 0; i < all_nodes[node_inx].parent_count; i++){
+    //Find if this parent is true in the list
     int inx = find_node_given_ptr(all_nodes, node_count,
 				  all_nodes[node_inx].parents[i]);
-    if(list[inx].is_required)
-      list_parents++;
+    if(true_false[inx].desire_true){
+      prob_inx |= ((uint)1 << i);
+    }
   }
+  
+  //Find own probability type
+  if(true_false[node_inx].desire_true)
+    return all_nodes[node_inx].prob_dist[prob_inx];
+  else
+    return 1.0 - all_nodes[node_inx].prob_dist[prob_inx];
   
   //Now remove the probabilities of those combinations that are not in
   //joint prob list
-  for(uint i = 0; i < prob_count; ++i){
-    //Now for each combination of i'th probability, find if that is in list
-    bool matches = true;
-    if(list_parents != 0)
-      for(uint j = 0; j < all_nodes[node_inx].parent_count; ++j){
+  /* for(uint i = 0; i < prob_count; ++i){ */
+  /*   //Now for each combination of i'th probability, find if that is in list */
+  /*   bool matches = true; */
+  /*   if(list_parents != 0) */
+  /*     for(uint j = 0; j < all_nodes[node_inx].parent_count; ++j){ */
 
-	//Find if this is involved
-	int inx = find_node_given_ptr(all_nodes, node_count,
-				      all_nodes[node_inx].parents[j]);
+  /* 	//Find if this is involved */
+  /* 	int inx = find_node_given_ptr(all_nodes, node_count, */
+  /* 				      all_nodes[node_inx].parents[j]); */
 
-	if(list[inx].is_required){
-	  //Now if the trueness or falseness of i matches with this parent
-	  bool curr_should_true = i & ((uint)1 << j);
-	  if((curr_should_true && !list[inx].desire_true) ||
-	     (!curr_should_true && list[inx].desire_true)){
-	    matches = false;
-	    break;
-	  }
-	}
-      }
-    if(matches){
-      res += all_nodes[node_inx].prob_dist[i];
-    }
-  }
+  /* 	if(list[inx].is_required){ */
+  /* 	  //Now if the trueness or falseness of i matches with this parent */
+  /* 	  bool curr_should_true = i & ((uint)1 << j); */
+  /* 	  if((curr_should_true && !list[inx].desire_true) || */
+  /* 	     (!curr_should_true && list[inx].desire_true)){ */
+  /* 	    matches = false; */
+  /* 	    break; */
+  /* 	  } */
+  /* 	} */
+  /*     } */
+  /*   if(matches){ */
+  /*     res += all_nodes[node_inx].prob_dist[i]; */
+  /*   } */
+  /* } */
 
   
-  if(list[node_inx].desire_true)
-    return res;
-  else
-    return 1.0- res;
+  /* if(list[node_inx].desire_true) */
+  /*   return res; */
+  /* else */
+  /*   return 1.0- res; */
 }
 
-double process_joint_recurse(JointEntry* entry, size_t search_start){
+double process_only_joint(JointEntry* entry, size_t search_start){
   //Find the first 'non required' here
-  size_t first_inx = 0;
+  size_t first_inx = search_start;
   for(; first_inx < node_count; ++first_inx){
     if(!entry[first_inx].is_required)
       break;
@@ -414,27 +366,38 @@ double process_joint_recurse(JointEntry* entry, size_t search_start){
   if(first_inx == node_count){
     double prod = 1.0;
     for(size_t i = 0; i < node_count; ++i){
-      if(entry[i].is_required){
-	double interm = process_one(entry, i);
-	dbg_logdouble(interm);
-	prod *= interm;
-      }
+      double interm = process_one(i, entry);
+      //dbg_logdouble(interm);
+      prod *= interm;
     }
     return prod;
   }
-  dbg_log_c_str("Hello");
 
   double sum = 0.0;
   entry[first_inx].is_required = 1;
   entry[first_inx].desire_true = 1;
-  sum += process_joint_recurse(entry, 1+first_inx);
+  sum += process_only_joint(entry, 1+first_inx);
   entry[first_inx].desire_true = 0;
-  sum += process_joint_recurse(entry, 1+first_inx);
+  sum += process_only_joint(entry, 1+first_inx);
   entry[first_inx].is_required = 0;
   return sum;
 }
 
-double process_joint(JointEntry* entry){
-  //Need to account for each possible remaining in entry
-  return process_joint_recurse(entry, 0);
+double process_conditional(JointEntry* entry){
+
+  //i.e for P(H... | E...) = P(H..., E...) / P(E...)
+  //First calculate P(H..., E...)
+  double numerator = process_only_joint(entry, 0);
+  dbg_log_c_str("Numerator value");
+  dbg_logdouble(numerator);
+  //Now calculate P(E...)
+  //Switch the 'is_required' off for all H...
+  for(size_t i = 0; i < node_count; ++i){
+    if(!entry[i].is_evidence)
+      entry[i].is_required = 0;
+  }
+  double denominator = process_only_joint(entry, 0);
+  dbg_log_c_str("Denominator value");
+  dbg_logdouble(denominator);
+  return numerator / denominator;
 }
