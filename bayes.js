@@ -1,8 +1,7 @@
-
 const canv = document.getElementById('canv');
 //canv.width = window.innerWidth;
 //canv.height = window.innerHeight;
-canv.width = 950;
+canv.width = 1350;
 canv.height = 750;
 const document_dragger = create_drag_parent(document.body);
 const canv_dragger = create_drag_parent(canv);
@@ -11,6 +10,9 @@ const canv_dragger = create_drag_parent(canv);
 //             and additional entry for joint probability
 //             evaluation : desire_true, is_required, is_evidence
 //             all boolean
+//             and it's table_obj
+//             and a boolean for whether to show table , 'show_table'
+
 let divs = [];
 
 function find_div_by_id(id){
@@ -68,11 +70,19 @@ function draw_canvas(){
 }
 draw_canvas();
 window.addEventListener('scroll', draw_canvas);
-
+var probability_text = '';
 let id1 = -1;
 let id2 = -1;
-
+const table_div = document.getElementById('table_place');
 function update_nodes_text(){
+    //Updates the tables' visibility
+    //Updates the outputs
+    table_div.replaceChildren();
+    for(var i = 0; i < divs.length; ++i){
+	if(divs[i].show_table){
+	    table_div.appendChild(divs[i].table_obj);
+	}
+    }
     const obj1 = decode_bayes_nodes(id1);
     const obj2 = decode_bayes_nodes(id2);
     if(obj1 != null)
@@ -83,15 +93,16 @@ function update_nodes_text(){
 	var name2 = obj2.node_name;
     else
 	var name2 = ''
-
+    
     document.getElementById('curr_nodes').textContent =
 	'First selection id is  ' + id1 +" named '" +name1 +
-	"' and second id is " + id2 + " named '" + name2 + "'";
+	"' and second id is " + id2 + " named '" + name2 + "'\n" +
+	probability_text;
 }
 document.getElementById('reset_selection').addEventListener('click',function(e){
     id1 = id2 = -1;
     update_nodes_text();
-    table_div.replaceChildren();
+
 });
 document.getElementById('join_node').addEventListener('click',function(e){
     if((id1 >= 0) && (id2 >= 0)){
@@ -104,6 +115,9 @@ document.getElementById('join_node').addEventListener('click',function(e){
 	}
 	else{
 	    console.log("Added an edge between object " + id1 + ' and object ' + id2);
+	    const table_obj =  create_prob_table(div2.id);
+	    div2.table_obj.replaceChildren();
+	    div2.table_obj.appendChild(table_obj);
 	}
     }
     draw_canvas();
@@ -142,7 +156,39 @@ function calculate_probability(){
 
 document.getElementById("find_joint_prob").
     addEventListener('click',function(e){
-	calculate_probability();
+	//Update probabilities
+	probability_text = 'P(';
+	var is_this_first = true;
+	for(var i = 0; i < divs.length; ++i){
+	    if(divs[i].is_required && !divs[i].is_evidence){
+		const obj = decode_bayes_nodes(divs[i].id);
+		if(!is_this_first)
+		    probability_text += ', ';
+		if(!divs[i].desire_true)
+		    probability_text += 'not ';
+		probability_text += "'" + obj.node_name +
+		    "'";
+		is_this_first = false;
+	    }
+	}
+	probability_text += ' | ';
+	is_this_first = true;
+	for(var i = 0; i < divs.length; ++i){
+	    if(divs[i].is_required && divs[i].is_evidence){
+		const obj = decode_bayes_nodes(divs[i].id);
+		if(!is_this_first)
+		    probability_text += ', ';
+		if(!divs[i].desire_true)
+		    probability_text += 'not ';
+		probability_text += "'" + obj.node_name +
+		    "'";
+		is_this_first = false;
+	    }
+	}
+	probability_text += ') = ';
+	const prob = calculate_probability();
+	probability_text += prob;
+	update_nodes_text();
     });
 
 
@@ -251,6 +297,35 @@ function bind_div_to_node(c_obj_id){
     radio2_div.appendChild(true_button);
     radio2_div.appendChild(true_label);
     new_obj.appendChild(radio2_div);
+
+    //Need to create a checkmark
+    new_obj.appendChild(document.createElement('br'));
+    
+    const table_check = document.createElement('input');
+    table_check.type = 'checkbox';
+    table_check.id = 'node_table_check_for' + c_obj_id;
+    div_obj.show_table = false;
+    table_check.addEventListener('change', ()=>{
+	div_obj.show_table = !div_obj.show_table;
+	update_nodes_text();
+    });
+    const table_label = document.createElement('label');
+    table_label['for'] = table_check.id;
+    table_label.textContent = 'Show Table';
+    new_obj.appendChild(table_check);
+    new_obj.appendChild(table_label);
+    
+    //Create Table :
+    
+
+    const this_table_div = document.createElement('div');
+    document_dragger.make_draggable(this_table_div);
+    this_table_div.style.top = (get_bounding_rect(canv).top) + 'px';
+    this_table_div.style.left = (get_bounding_rect(canv).left + get_bounding_rect(canv).width - 200) + 'px';
+
+    const table_obj =  create_prob_table(c_obj_id);
+    this_table_div.appendChild(table_obj);
+    div_obj.table_obj = this_table_div;
     
     new_obj.style.position = 'fixed';
     //new_obj.style.width = '50px';
@@ -266,7 +341,6 @@ function bind_div_to_node(c_obj_id){
     new_obj.addEventListener('dblclick', function(e){
 	if(id1 < 0){
 	    id1 = c_obj_id;
-	    create_prob_table(c_obj_id);
 	}
 	else if((id1 != c_obj_id) && (id2 < 0)){
 	    id2 = c_obj_id;
@@ -292,12 +366,6 @@ document.getElementById('add_node').addEventListener('click',function(e){
     bind_div_to_node(c_obj_id);
 });
 
-const table_div = document.getElementById('table_place');
-document_dragger.make_draggable(table_div);
-table_div.style.top = (get_bounding_rect(canv).top) + 'px';
-table_div.style.left = (get_bounding_rect(canv).left + get_bounding_rect(canv).width - 200) + 'px'; 
-var table_elem = null;
-var table_id = -1;
 
 function change_prob(id, inx, new_val){
     const node = decode_bayes_nodes(id);
@@ -374,10 +442,9 @@ function create_prob_table(id){
 
 	tble_vals.push([{child_node : entry}]);
     }
-    table_div.replaceChildren();
-    table_elem = make_table(tble_head_row, tble_head_col, tble_vals);
-    
-    table_div.appendChild(table_elem);
+
+    table_elem = make_table(tble_head_row, tble_head_col, tble_vals);	
+    return table_elem;
 }
 
 //Design a sample loading system
@@ -422,6 +489,13 @@ function load_data(data_things){
 	    change_prob(loaded_ids[i], j, data_things[i].prob_dists[j]);
 	}
     }
+    
+    for(var i = 0; i < data_things.length; ++i){
+	const table_obj =  create_prob_table(divs[i].id);
+	divs[i].table_obj.replaceChildren();
+	divs[i].table_obj.appendChild(table_obj);
+    }
+
 }
 
 const sample_data = [
@@ -452,12 +526,42 @@ const family_eg = [
      prob_dists: [0.3, 0.90, 0.97, 0.99]},
     {node_id: 4, name: "Hear Bark", parents:[3], prob_dists: [0.01, 0.7]}
 ];
-     
-    
+
+
+
+const health_data = [{"node_id":0,"name":"Visit Asia?"
+		      ,"parents":[]
+		      ,"prob_dists":[0.009999999776482582]},
+		     {"node_id":1,"name":"Has Tuberculosis"
+		      ,"parents":[0]
+		      ,"prob_dists":[0.009999999776482582,0.05000000074505806]},
+		     {"node_id":2,"name":"Tuberculosis or Cancer"
+		      ,"parents":[1,4]
+		      ,"prob_dists":[0,1,1,1]},
+		     {"node_id":3,"name":"Smoker"
+		      ,"parents":[]
+		      ,"prob_dists":[0.5]},
+		     {"node_id":4,"name":"Has Lung Cancer"
+		      ,"parents":[3]
+		      ,"prob_dists":[0.009999999776482582,0.10000000149011612]},
+		     {"node_id":5,"name":"Has Bronchitis"
+		      ,"parents":[3]
+		      ,"prob_dists":[0.30000001192092896,0.6000000238418579]},
+		     {"node_id":6,"name":"Shortness of Breath"
+		      ,"parents":[5,2]
+		      ,"prob_dists":[0.10000000149011612,0.800000011920929,0.699999988079071,0.8999999761581421]},
+		     {"node_id":7,"name":"Positive X-Ray"
+		      ,"parents":[2]
+		      ,"prob_dists":[0.05000000074505806,0.9800000190734863]}];
+
+
     
      
 wasm_promise.then(()=>{
     //load_data(sample_data);
     //load_data(sprinkler_data);
-    load_data(family_eg);
+    //load_data(family_eg);
+    load_data(health_data);
 });
+
+//TODO:: make each one of them spawn a table
